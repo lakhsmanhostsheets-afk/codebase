@@ -1,10 +1,12 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { NavigationProgress } from "@/components/layout/navigation-progress";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-slate-50">
       <AppSidebar />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <NavigationProgress />
         {/* Subtle main-area backdrop */}
         <div
           className="pointer-events-none absolute inset-0 opacity-60"

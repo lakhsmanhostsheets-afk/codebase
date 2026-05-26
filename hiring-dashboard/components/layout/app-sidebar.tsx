@@ -17,6 +17,7 @@ import { NAV_ITEMS } from "@/lib/constants";
 
 const ICONS = {
   "/": LayoutDashboard,
+  "/stores": MapPin,
   "/open-positions": Store,
   "/lineups": Users,
   "/import": FileSpreadsheet,

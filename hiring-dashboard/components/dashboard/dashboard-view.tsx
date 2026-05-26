@@ -15,6 +15,7 @@ import {
 import { Download, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KPI_METRICS } from "@/lib/constants";
+import { PageLoader } from "@/components/ui/page-loader";
 import { inputClassName } from "@/components/ui/form-field";
 
 type Totals = Record<string, number>;
@@ -24,6 +25,12 @@ type StateRow = {
   openPositionCount: number;
   stores: number;
   cities: number;
+};
+type FilterOptions = {
+  states: string[];
+  cities: string[];
+  supervisors: string[];
+  accounts: string[];
 };
 
 const emptyTotals: Totals = Object.fromEntries(KPI_METRICS.map((m) => [m.key, 0]));
@@ -37,7 +44,13 @@ export function DashboardView() {
   const [toDate, setToDate] = useState("");
   const [totals, setTotals] = useState<Totals>(emptyTotals);
   const [states, setStates] = useState<StateRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    states: [],
+    cities: [],
+    supervisors: [],
+    accounts: [],
+  });
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   const queryString = useMemo(() => {
@@ -62,8 +75,9 @@ export function DashboardView() {
       if (!response.ok) throw new Error(data.error || "Failed to load dashboard.");
       setTotals({ ...emptyTotals, ...(data.totals || {}) });
       setStates(data.states || []);
+      if (data.filterOptions) setFilterOptions(data.filterOptions);
       if (!data.totals?.totalCount && !data.states?.length) {
-        setMessage("No data yet. Add open positions or import Excel from the left menu.");
+        setMessage("No data for these filters.");
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to load dashboard.");
@@ -76,10 +90,27 @@ export function DashboardView() {
     window.open(`/api/exports/${format}?${queryString}`, "_blank");
   }
 
+  function clearFilters() {
+    setState("");
+    setCity("");
+    setSupervisor("");
+    setAccountName("");
+    setFromDate("");
+    setToDate("");
+  }
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial metrics load
-    void fetchSummary();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchSummary();
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced filter apply
+  }, [queryString]);
+
+  const filteredCities = useMemo(() => {
+    if (!state) return filterOptions.cities;
+    return filterOptions.cities;
+  }, [filterOptions.cities, state]);
 
   return (
     <>
@@ -94,7 +125,7 @@ export function DashboardView() {
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "Loading…" : "Refresh"}
+              Refresh
             </button>
             <button
               type="button"
@@ -116,18 +147,81 @@ export function DashboardView() {
         }
       />
 
-      <div className="flex-1 space-y-6 p-6">
+      <div className="relative flex-1 space-y-6 p-6">
+        {loading ? (
+          <div className="absolute inset-0 z-10 flex items-start justify-center bg-slate-50/70 pt-24">
+            <PageLoader label="Loading dashboard…" />
+          </div>
+        ) : null}
+
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Filters
-          </p>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Filters (auto-apply)
+            </p>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-xs font-medium text-indigo-600 hover:underline"
+            >
+              Clear all
+            </button>
+          </div>
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" className={inputClassName} />
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" className={inputClassName} />
-            <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} placeholder="Supervisor" className={inputClassName} />
-            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Account" className={inputClassName} />
-            <input value={fromDate} onChange={(e) => setFromDate(e.target.value)} type="date" className={inputClassName} />
-            <input value={toDate} onChange={(e) => setToDate(e.target.value)} type="date" className={inputClassName} />
+            <select value={state} onChange={(e) => setState(e.target.value)} className={inputClassName}>
+              <option value="">All states</option>
+              {filterOptions.states.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select value={city} onChange={(e) => setCity(e.target.value)} className={inputClassName}>
+              <option value="">All cities</option>
+              {filteredCities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <select
+              value={supervisor}
+              onChange={(e) => setSupervisor(e.target.value)}
+              className={inputClassName}
+            >
+              <option value="">All supervisors</option>
+              {filterOptions.supervisors.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              className={inputClassName}
+            >
+              <option value="">All accounts</option>
+              {filterOptions.accounts.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            <input
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              type="date"
+              className={inputClassName}
+              title="From date"
+            />
+            <input
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              type="date"
+              className={inputClassName}
+              title="To date"
+            />
           </div>
         </section>
 
@@ -153,7 +247,7 @@ export function DashboardView() {
           {KPI_METRICS.map((metric) => (
             <div
               key={metric.key}
-              className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm`}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
             >
               <div className={`h-1.5 bg-gradient-to-r ${metric.color}`} />
               <div className="p-4">
@@ -184,7 +278,7 @@ export function DashboardView() {
                 </ResponsiveContainer>
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                  Click Refresh to load chart data
+                  No chart data for current filters
                 </div>
               )}
             </div>
@@ -213,7 +307,7 @@ export function DashboardView() {
                   ) : (
                     <tr>
                       <td colSpan={3} className="p-6 text-center text-slate-500">
-                        No rows yet
+                        No rows for filters
                       </td>
                     </tr>
                   )}

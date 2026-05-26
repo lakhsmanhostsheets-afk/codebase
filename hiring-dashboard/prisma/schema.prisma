@@ -23,11 +23,43 @@ enum FinalRemark {
   OTHER
 }
 
+model Country {
+  id        String  @id @default(cuid())
+  name      String
+  code      String  @unique
+  states    State[]
+  createdAt DateTime @default(now())
+}
+
+model State {
+  id        String  @id @default(cuid())
+  name      String
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  cities    City[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  stateId   String
+  isCustom  Boolean  @default(false)
+  state     State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([stateId, name])
+  @@index([stateId])
+}
+
 model Store {
   id               String         @id @default(cuid())
   externalStoreId  String?        @unique
   accountName      String
   storeName        String
+  country          String         @default("India")
   city             String
   state            String
   address          String
