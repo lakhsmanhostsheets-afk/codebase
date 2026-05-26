@@ -1,0 +1,141 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FinalRemark {
+  INTERVIEW_PENDING
+  REJECTED
+  FINAL_SELECTION
+  CLIENT_SELECTED
+  BACK_OUT
+  ON_HOLD
+  OTHER
+}
+
+model Store {
+  id               String         @id @default(cuid())
+  externalStoreId  String?        @unique
+  accountName      String
+  storeName        String
+  city             String
+  state            String
+  address          String
+  supervisor       String?
+  poa              String?
+  region           String?
+  vertical         String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  openPositions    OpenPosition[]
+  lineups          Lineup[]
+
+  @@index([storeName, city, state])
+  @@index([accountName, storeName])
+}
+
+model OpenPosition {
+  id                String    @id @default(cuid())
+  storeId           String
+  designation       String
+  positionCount     Int
+  openPositionCount Int
+  dateOfOpen        DateTime?
+  selectionDate     DateTime?
+  sourceFileName    String?
+  sourceRowNumber   Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([designation])
+}
+
+model Candidate {
+  id                    String    @id @default(cuid())
+  name                  String
+  contactNumber         String?
+  recruiter             String?
+  qualification         String?
+  currentOrganization   String?
+  experienceYears       Float?
+  currentSalary         Float?
+  expectedSalary        Float?
+  city                  String?
+  state                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  lineups               Lineup[]
+
+  @@index([name])
+  @@index([contactNumber])
+}
+
+model Lineup {
+  id                String      @id @default(cuid())
+  storeId           String
+  candidateId       String
+  lineupDate        DateTime?
+  clientRemarks     String?
+  finalRemarks      String?
+  finalRemarkTag    FinalRemark @default(OTHER)
+  feedbackDate      DateTime?
+  tatForFeedback    Int?
+  remarks           String?
+  sourceFileName    String?
+  sourceRowNumber   Int?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  store             Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  candidate         Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([candidateId])
+  @@index([finalRemarkTag])
+}
+
+model ImportJob {
+  id                 String      @id @default(cuid())
+  sourceFileName     String
+  sourceStoragePath  String?
+  status             String
+  startedAt          DateTime    @default(now())
+  completedAt        DateTime?
+  rowsRead           Int         @default(0)
+  rowsImported       Int         @default(0)
+  errorsCount        Int         @default(0)
+  errorsJson         String?
+}
+
+model Dashboard {
+  id              String            @id @default(cuid())
+  name            String
+  isDefault       Boolean           @default(false)
+  filtersJson     String
+  layoutJson      String
+  widgets         DashboardWidget[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model DashboardWidget {
+  id            String     @id @default(cuid())
+  dashboardId   String
+  title         String
+  widgetType    String
+  configJson    String
+  orderIndex    Int
+  dashboard     Dashboard  @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([dashboardId, orderIndex])
+}
