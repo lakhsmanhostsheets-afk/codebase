@@ -1,6 +1,6 @@
 import { FinalRemark } from "@prisma/client";
-import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
+import { extractWorkbookSheets } from "@/lib/domain/workbook-sheets";
 
 type ImportResult = {
   rowsRead: number;
@@ -62,12 +62,11 @@ function parseNumber(value: unknown): number | undefined {
 
 function parseDate(value: unknown): Date | undefined {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (typeof value === "number") {
-    const d = XLSX.SSF.parse_date_code(value);
-    if (!d) return undefined;
-    return new Date(d.y, d.m - 1, d.d);
-  }
   if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  if (typeof value === "number") {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
@@ -138,14 +137,11 @@ function storeCompositeKey(row: { storeName?: string; city?: string; state?: str
   return `${(row.storeName || "").toLowerCase()}|${(row.city || "").toLowerCase()}|${(row.state || "").toLowerCase()}`;
 }
 
-export async function importWorkbook(
-  buffer: Buffer,
+export async function importParsedRows(
+  openListRows: Record<string, unknown>[],
+  lineupRows: Record<string, unknown>[],
   sourceFileName: string,
 ): Promise<ImportResult> {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const openListSheet = workbook.Sheets["AO Smith Open list"] ?? workbook.Sheets["Open List"];
-  const lineupSheet = workbook.Sheets["Line Up Final"];
-
   const errors: string[] = [];
   let rowsRead = 0;
   let rowsImported = 0;
@@ -158,20 +154,6 @@ export async function importWorkbook(
   });
 
   try {
-    if (!openListSheet) {
-      throw new Error("Could not find 'AO Smith Open list' or 'Open List' sheet.");
-    }
-    if (!lineupSheet) {
-      throw new Error("Could not find 'Line Up Final' sheet.");
-    }
-
-    const openListRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(openListSheet, {
-      defval: "",
-    });
-    const lineupRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(lineupSheet, {
-      defval: "",
-    });
-
     rowsRead = openListRows.length + lineupRows.length;
 
     const storeIdByKey = new Map<string, string>();
@@ -328,4 +310,12 @@ export async function importWorkbook(
     rowsImported,
     errors,
   };
+}
+
+export async function importWorkbook(
+  buffer: Buffer,
+  sourceFileName: string,
+): Promise<ImportResult> {
+  const { openListRows, lineupRows } = extractWorkbookSheets(buffer);
+  return importParsedRows(openListRows, lineupRows, sourceFileName);
 }
