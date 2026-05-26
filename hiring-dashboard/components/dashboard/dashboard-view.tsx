@@ -158,7 +158,7 @@ export function DashboardView() {
               <div className={`h-1.5 bg-gradient-to-r ${metric.color}`} />
               <div className="p-4">
                 <p className="text-sm font-medium text-slate-600">{metric.label}</p>
-                <p className={`mt-2 text-3xl font-bold ${metric.text}`}>
+                <p className={`font-heading mt-2 text-3xl font-bold ${metric.text}`}>
                   {totals[metric.key] ?? 0}
                 </p>
               </div>
