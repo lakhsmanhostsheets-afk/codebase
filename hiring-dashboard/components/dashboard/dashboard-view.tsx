@@ -232,10 +232,6 @@ export function DashboardView() {
               <span className="ml-1">
                 <Link href="/open-positions" className="font-semibold underline">
                   Add open position
-                </Link>{" "}
-                or{" "}
-                <Link href="/import" className="font-semibold underline">
-                  import Excel
                 </Link>
                 .
               </span>

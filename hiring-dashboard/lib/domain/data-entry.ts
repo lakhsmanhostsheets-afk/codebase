@@ -1,4 +1,4 @@
-import { FinalRemark } from "@prisma/client";
+import { FinalRemark, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export function parseFinalRemarkTag(value: string): FinalRemark {
@@ -127,17 +127,15 @@ export async function createLineupRecord(input: LineupInput) {
   });
 
   if (tag === FinalRemark.FINAL_SELECTION) {
-    const openPositions = await prisma.openPosition.findMany({
-      where: { storeId: input.storeId },
-      orderBy: { createdAt: "desc" },
+    await prisma.openPosition.updateMany({
+      where: {
+        storeId: input.storeId,
+        openPositionCount: { gt: 0 },
+      },
+      data: {
+        openPositionCount: { decrement: 1 },
+      },
     });
-    for (const op of openPositions) {
-      const nextOpen = Math.max(0, op.openPositionCount - 1);
-      await prisma.openPosition.update({
-        where: { id: op.id },
-        data: { openPositionCount: nextOpen },
-      });
-    }
   }
 
   return lineup;
@@ -168,6 +166,87 @@ export async function listRecentOpenPositions(limit = 100) {
   });
 }
 
+export type OpenPositionsQuery = {
+  query?: string;
+  state?: string;
+  city?: string;
+  designation?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export async function listOpenPositions(query: OpenPositionsQuery) {
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+  const skip = (page - 1) * pageSize;
+  const text = query.query?.trim();
+
+  const where: Prisma.OpenPositionWhereInput = {
+    ...(query.state || query.city
+      ? {
+          store: {
+            ...(query.state ? { state: query.state } : {}),
+            ...(query.city ? { city: query.city } : {}),
+          },
+        }
+      : {}),
+    ...(query.designation ? { designation: query.designation } : {}),
+    ...(text
+      ? {
+          OR: [
+            { designation: { contains: text, mode: "insensitive" } },
+            { store: { storeName: { contains: text, mode: "insensitive" } } },
+            { store: { city: { contains: text, mode: "insensitive" } } },
+            { store: { state: { contains: text, mode: "insensitive" } } },
+            { store: { supervisor: { contains: text, mode: "insensitive" } } },
+            { store: { accountName: { contains: text, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, rows, states, cities, designations] = await prisma.$transaction([
+    prisma.openPosition.count({ where }),
+    prisma.openPosition.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" },
+      include: { store: true },
+    }),
+    prisma.store.findMany({
+      where: { openPositions: { some: {} } },
+      select: { state: true },
+      distinct: ["state"],
+      orderBy: { state: "asc" },
+    }),
+    prisma.store.findMany({
+      where: { openPositions: { some: {} } },
+      select: { city: true },
+      distinct: ["city"],
+      orderBy: { city: "asc" },
+    }),
+    prisma.openPosition.findMany({
+      select: { designation: true },
+      distinct: ["designation"],
+      orderBy: { designation: "asc" },
+    }),
+  ]);
+
+  return {
+    rows,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    filters: {
+      states: states.map((row) => row.state).filter(Boolean),
+      cities: cities.map((row) => row.city).filter(Boolean),
+      designations: designations.map((row) => row.designation).filter(Boolean),
+    },
+  };
+}
+
 export async function listRecentLineups(limit = 100) {
   return prisma.lineup.findMany({
     take: limit,
@@ -177,6 +256,85 @@ export async function listRecentLineups(limit = 100) {
       candidate: true,
     },
   });
+}
+
+export type LineupsQuery = {
+  query?: string;
+  state?: string;
+  city?: string;
+  storeId?: string;
+  finalRemarkTag?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export async function listLineups(query: LineupsQuery) {
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+  const skip = (page - 1) * pageSize;
+  const text = query.query?.trim();
+
+  const where: Prisma.LineupWhereInput = {
+    ...(query.storeId ? { storeId: query.storeId } : {}),
+    ...(query.finalRemarkTag ? { finalRemarkTag: parseFinalRemarkTag(query.finalRemarkTag) } : {}),
+    ...(query.state || query.city
+      ? {
+          store: {
+            ...(query.state ? { state: query.state } : {}),
+            ...(query.city ? { city: query.city } : {}),
+          },
+        }
+      : {}),
+    ...(text
+      ? {
+          OR: [
+            { finalRemarks: { contains: text, mode: "insensitive" } },
+            { remarks: { contains: text, mode: "insensitive" } },
+            { candidate: { name: { contains: text, mode: "insensitive" } } },
+            { candidate: { recruiter: { contains: text, mode: "insensitive" } } },
+            { candidate: { contactNumber: { contains: text, mode: "insensitive" } } },
+            { store: { storeName: { contains: text, mode: "insensitive" } } },
+            { store: { city: { contains: text, mode: "insensitive" } } },
+            { store: { state: { contains: text, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, rows, states, cities] = await prisma.$transaction([
+    prisma.lineup.count({ where }),
+    prisma.lineup.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" },
+      include: { store: true, candidate: true },
+    }),
+    prisma.store.findMany({
+      where: { lineups: { some: {} } },
+      select: { state: true },
+      distinct: ["state"],
+      orderBy: { state: "asc" },
+    }),
+    prisma.store.findMany({
+      where: { lineups: { some: {} } },
+      select: { city: true },
+      distinct: ["city"],
+      orderBy: { city: "asc" },
+    }),
+  ]);
+
+  return {
+    rows,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    filters: {
+      states: states.map((row) => row.state).filter(Boolean),
+      cities: cities.map((row) => row.city).filter(Boolean),
+    },
+  };
 }
 
 export type StoreInput = {

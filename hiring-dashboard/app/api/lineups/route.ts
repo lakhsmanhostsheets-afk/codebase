@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createLineupRecord, listRecentLineups } from "@/lib/domain/data-entry";
+import { createLineupRecord, listLineups } from "@/lib/domain/data-entry";
 
 const createSchema = z.object({
   storeId: z.string().min(1),
@@ -20,10 +20,30 @@ const createSchema = z.object({
   remarks: z.string().optional(),
 });
 
-export async function GET() {
+const querySchema = z.object({
+  query: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
+  storeId: z.string().optional(),
+  finalRemarkTag: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export async function GET(request: Request) {
   try {
-    const rows = await listRecentLineups();
-    return NextResponse.json({ rows });
+    const { searchParams } = new URL(request.url);
+    const query = querySchema.parse({
+      query: searchParams.get("query") ?? undefined,
+      state: searchParams.get("state") ?? undefined,
+      city: searchParams.get("city") ?? undefined,
+      storeId: searchParams.get("storeId") ?? undefined,
+      finalRemarkTag: searchParams.get("finalRemarkTag") ?? undefined,
+      page: searchParams.get("page") ?? undefined,
+      pageSize: searchParams.get("pageSize") ?? undefined,
+    });
+    const data = await listLineups(query);
+    return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to load lineups." },

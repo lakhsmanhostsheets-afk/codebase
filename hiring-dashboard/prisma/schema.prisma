@@ -74,6 +74,7 @@ model Store {
 
   @@index([storeName, city, state])
   @@index([accountName, storeName])
+  @@index([state, city])
 }
 
 model OpenPosition {
@@ -92,6 +93,8 @@ model OpenPosition {
 
   @@index([storeId])
   @@index([designation])
+  @@index([createdAt])
+  @@index([dateOfOpen])
 }
 
 model Candidate {
@@ -135,6 +138,7 @@ model Lineup {
   @@index([storeId])
   @@index([candidateId])
   @@index([finalRemarkTag])
+  @@index([createdAt])
 }
 
 model ImportJob {

@@ -40,17 +40,23 @@ function buildDateWhere(filters: DashboardFilters): Prisma.OpenPositionWhereInpu
 export async function getSummaryTotals(filters: DashboardFilters) {
   const whereStore = buildStoreWhere(filters);
   const whereDate = buildDateWhere(filters);
+  const whereOpenPosition = { store: whereStore, ...whereDate };
 
-  const openPositions = await prisma.openPosition.findMany({
-    where: { store: whereStore, ...whereDate },
-    select: {
-      positionCount: true,
-      openPositionCount: true,
-      storeId: true,
-    },
-  });
+  const [openPositionTotals, openPositionStores] = await Promise.all([
+    prisma.openPosition.aggregate({
+      where: whereOpenPosition,
+      _sum: {
+        positionCount: true,
+        openPositionCount: true,
+      },
+    }),
+    prisma.openPosition.groupBy({
+      by: ["storeId"],
+      where: whereOpenPosition,
+    }),
+  ]);
 
-  const storeIds = [...new Set(openPositions.map((x) => x.storeId))];
+  const storeIds = openPositionStores.map((row) => row.storeId);
   const lineups = storeIds.length
     ? await prisma.lineup.groupBy({
         by: ["finalRemarkTag", "storeId"],
@@ -85,11 +91,8 @@ export async function getSummaryTotals(filters: DashboardFilters) {
   }
 
   return {
-    totalCount: openPositions.reduce((sum, row) => sum + row.positionCount, 0),
-    openPositionCount: openPositions.reduce(
-      (sum, row) => sum + row.openPositionCount,
-      0,
-    ),
+    totalCount: openPositionTotals._sum.positionCount ?? 0,
+    openPositionCount: openPositionTotals._sum.openPositionCount ?? 0,
     lineUpCount: lineups.reduce((sum, row) => sum + row._count._all, 0),
     ...finalRemarkTotals,
   };
@@ -98,21 +101,28 @@ export async function getSummaryTotals(filters: DashboardFilters) {
 export async function getStateBreakdown(filters: DashboardFilters) {
   const whereStore = buildStoreWhere(filters);
   const whereDate = buildDateWhere(filters);
+  const whereOpenPosition = { store: whereStore, ...whereDate };
 
-  const rows = await prisma.openPosition.findMany({
-    where: { store: whereStore, ...whereDate },
-    select: {
+  const groupedByStore = await prisma.openPosition.groupBy({
+    by: ["storeId"],
+    where: whereOpenPosition,
+    _sum: {
       positionCount: true,
       openPositionCount: true,
-      store: {
-        select: {
-          id: true,
-          state: true,
-          city: true,
-        },
-      },
     },
   });
+
+  if (!groupedByStore.length) return [];
+
+  const stores = await prisma.store.findMany({
+    where: { id: { in: groupedByStore.map((row) => row.storeId) } },
+    select: {
+      id: true,
+      state: true,
+      city: true,
+    },
+  });
+  const storeById = new Map(stores.map((store) => [store.id, store]));
 
   const grouped = new Map<
     string,
@@ -125,8 +135,10 @@ export async function getStateBreakdown(filters: DashboardFilters) {
     }
   >();
 
-  for (const row of rows) {
-    const state = row.store.state.trim() || "(blank)";
+  for (const row of groupedByStore) {
+    const store = storeById.get(row.storeId);
+    if (!store) continue;
+    const state = store.state.trim() || "(blank)";
     if (!grouped.has(state)) {
       grouped.set(state, {
         state,
@@ -137,10 +149,10 @@ export async function getStateBreakdown(filters: DashboardFilters) {
       });
     }
     const item = grouped.get(state)!;
-    item.totalCount += row.positionCount;
-    item.openPositionCount += row.openPositionCount;
-    item.storeIds.add(row.store.id);
-    if (row.store.city) item.cities.add(row.store.city.trim());
+    item.totalCount += row._sum.positionCount ?? 0;
+    item.openPositionCount += row._sum.openPositionCount ?? 0;
+    item.storeIds.add(store.id);
+    if (store.city) item.cities.add(store.city.trim());
   }
 
   return [...grouped.values()]

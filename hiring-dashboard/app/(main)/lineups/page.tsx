@@ -57,6 +57,17 @@ export default function LineupsPage() {
   const [form, setForm] = useState(initialForm);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [rows, setRows] = useState<LineupRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [storeFilter, setStoreFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [availableStates, setAvailableStates] = useState<string[]>([]);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const pageSize = 12;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -66,22 +77,45 @@ export default function LineupsPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function loadData() {
+  async function loadData(page = currentPage) {
     setLoading(true);
+    const lineupParams = new URLSearchParams();
+    if (searchQuery.trim()) lineupParams.set("query", searchQuery.trim());
+    if (stateFilter) lineupParams.set("state", stateFilter);
+    if (cityFilter) lineupParams.set("city", cityFilter);
+    if (storeFilter) lineupParams.set("storeId", storeFilter);
+    if (statusFilter) lineupParams.set("finalRemarkTag", statusFilter);
+    lineupParams.set("page", String(page));
+    lineupParams.set("pageSize", String(pageSize));
     const [storesRes, lineupsRes] = await Promise.all([
       fetch("/api/stores"),
-      fetch("/api/lineups"),
+      fetch(`/api/lineups?${lineupParams.toString()}`),
     ]);
     const storesData = await storesRes.json();
     const lineupsData = await lineupsRes.json();
     if (storesRes.ok) setStores(storesData.stores || []);
-    if (lineupsRes.ok) setRows(lineupsData.rows || []);
+    if (lineupsRes.ok) {
+      setRows(lineupsData.rows || []);
+      setTotalRows(lineupsData.total || 0);
+      setTotalPages(lineupsData.totalPages || 1);
+      if (page > (lineupsData.totalPages || 1)) {
+        setCurrentPage(lineupsData.totalPages || 1);
+      }
+      if (lineupsData.filters) {
+        setAvailableStates(lineupsData.filters.states || []);
+        setAvailableCities(lineupsData.filters.cities || []);
+      }
+    }
     setLoading(false);
   }
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    const timer = setTimeout(() => {
+      void loadData(currentPage);
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced filter apply
+  }, [currentPage, searchQuery, stateFilter, cityFilter, storeFilter, statusFilter]);
 
   function startEdit(row: LineupRow) {
     setEditingId(row.id);
@@ -129,7 +163,7 @@ export default function LineupsPage() {
       if (!response.ok) throw new Error(data.error || "Save failed");
       setMessage(editingId ? `Updated ${data.row.candidate.name}.` : `Saved lineup for ${data.row.candidate.name}.`);
       resetForm();
-      await loadData();
+      await loadData(currentPage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed");
     } finally {
@@ -146,7 +180,7 @@ export default function LineupsPage() {
       return;
     }
     if (editingId === id) resetForm();
-    await loadData();
+    await loadData(currentPage);
   }
 
   function normalizedPhone(value: string | null) {
@@ -299,7 +333,80 @@ export default function LineupsPage() {
         </form>
 
         <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-3">
-          <p className="mb-3 text-sm font-semibold text-slate-800">All lineups ({rows.length})</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-800">All lineups ({totalRows})</p>
+            <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto lg:grid-cols-3">
+              <input
+                className={inputClassName}
+                value={searchQuery}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setSearchQuery(e.target.value);
+                }}
+                placeholder="Search candidate, store, recruiter..."
+              />
+              <select
+                className={inputClassName}
+                value={stateFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setStateFilter(e.target.value);
+                }}
+              >
+                <option value="">All states</option>
+                {availableStates.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClassName}
+                value={cityFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setCityFilter(e.target.value);
+                }}
+              >
+                <option value="">All cities</option>
+                {availableCities.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClassName}
+                value={storeFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setStoreFilter(e.target.value);
+                }}
+              >
+                <option value="">All stores</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.storeName}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClassName}
+                value={statusFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setStatusFilter(e.target.value);
+                }}
+              >
+                <option value="">All statuses</option>
+                {FINAL_REMARK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           {loading ? <PageLoader overlay label="Loading lineups…" /> : null}
           <div className="max-h-[720px] overflow-auto">
             <table className="w-full text-sm">
@@ -376,6 +483,29 @@ export default function LineupsPage() {
             {!loading && !rows.length ? (
               <p className="py-8 text-center text-slate-500">No lineups yet</p>
             ) : null}
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+            <span className="text-slate-500">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="rounded border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                disabled={currentPage >= totalPages || loading}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>

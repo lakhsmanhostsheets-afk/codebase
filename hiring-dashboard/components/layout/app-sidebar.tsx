@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Store,
   Users,
-  FileSpreadsheet,
   LogOut,
   Sparkles,
   MapPin,
@@ -20,7 +19,6 @@ const ICONS = {
   "/stores": MapPin,
   "/open-positions": Store,
   "/lineups": Users,
-  "/import": FileSpreadsheet,
 } as const;
 
 export function AppSidebar() {

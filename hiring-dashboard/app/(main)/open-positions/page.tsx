@@ -48,6 +48,17 @@ const initialForm = {
 export default function OpenPositionsPage() {
   const [form, setForm] = useState(initialForm);
   const [rows, setRows] = useState<PositionRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [availableStates, setAvailableStates] = useState<string[]>([]);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableDesignations, setAvailableDesignations] = useState<string[]>([]);
+  const pageSize = 12;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -57,17 +68,40 @@ export default function OpenPositionsPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function loadRows() {
+  async function loadRows(page = currentPage) {
     setLoading(true);
-    const response = await fetch("/api/open-positions");
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("query", searchQuery.trim());
+    if (stateFilter) params.set("state", stateFilter);
+    if (cityFilter) params.set("city", cityFilter);
+    if (designationFilter) params.set("designation", designationFilter);
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
+    const response = await fetch(`/api/open-positions?${params.toString()}`);
     const data = await response.json();
-    if (response.ok) setRows(data.rows || []);
+    if (response.ok) {
+      setRows(data.rows || []);
+      setTotalRows(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      if (page > (data.totalPages || 1)) {
+        setCurrentPage(data.totalPages || 1);
+      }
+      if (data.filters) {
+        setAvailableStates(data.filters.states || []);
+        setAvailableCities(data.filters.cities || []);
+        setAvailableDesignations(data.filters.designations || []);
+      }
+    }
     setLoading(false);
   }
 
   useEffect(() => {
-    void loadRows();
-  }, []);
+    const timer = setTimeout(() => {
+      void loadRows(currentPage);
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced filter apply
+  }, [currentPage, searchQuery, stateFilter, cityFilter, designationFilter]);
 
   function startEdit(row: PositionRow) {
     setEditingId(row.id);
@@ -139,7 +173,7 @@ export default function OpenPositionsPage() {
         setMessage(`Saved opening for ${data.row.store.storeName}, ${data.row.store.city}.`);
       }
       resetForm();
-      await loadRows();
+      await loadRows(currentPage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed");
     } finally {
@@ -156,7 +190,7 @@ export default function OpenPositionsPage() {
       return;
     }
     if (editingId === id) resetForm();
-    await loadRows();
+    await loadRows(currentPage);
   }
 
   return (
@@ -302,7 +336,65 @@ export default function OpenPositionsPage() {
         </form>
 
         <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="mb-3 text-sm font-semibold text-slate-800">All openings ({rows.length})</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-800">All openings ({totalRows})</p>
+            <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto lg:grid-cols-4">
+              <input
+                className={inputClassName}
+                value={searchQuery}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setSearchQuery(e.target.value);
+                }}
+                placeholder="Search store, city, role..."
+              />
+              <select
+                className={inputClassName}
+                value={stateFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setStateFilter(e.target.value);
+                }}
+              >
+                <option value="">All states</option>
+                {availableStates.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClassName}
+                value={cityFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setCityFilter(e.target.value);
+                }}
+              >
+                <option value="">All cities</option>
+                {availableCities.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClassName}
+                value={designationFilter}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setDesignationFilter(e.target.value);
+                }}
+              >
+                <option value="">All roles</option>
+                {availableDesignations.map((designation) => (
+                  <option key={designation} value={designation}>
+                    {designation}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           {loading ? <PageLoader overlay label="Loading openings…" /> : null}
           <div className="max-h-[640px] overflow-auto">
             <table className="w-full text-sm">
@@ -349,6 +441,29 @@ export default function OpenPositionsPage() {
             {!loading && !rows.length ? (
               <p className="py-8 text-center text-slate-500">No records yet</p>
             ) : null}
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+            <span className="text-slate-500">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="rounded border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                disabled={currentPage >= totalPages || loading}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>

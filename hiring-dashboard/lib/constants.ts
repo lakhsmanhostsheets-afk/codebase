@@ -25,5 +25,4 @@ export const NAV_ITEMS = [
   { href: "/stores", label: "Stores", description: "Manage store master data" },
   { href: "/open-positions", label: "Open Positions", description: "Add store openings" },
   { href: "/lineups", label: "Candidate Lineups", description: "View & edit candidates" },
-  { href: "/import", label: "Import Excel", description: "Bulk upload workbook" },
 ] as const;
