@@ -9,8 +9,8 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/20 px-4">
-      <form action={formAction} className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 px-4">
+      <form action={formAction} className="w-full max-w-sm space-y-4 rounded-2xl border border-white/10 bg-white p-8 shadow-xl">
         <div>
           <h1 className="text-xl font-semibold">Admin Login</h1>
           <p className="text-sm text-muted-foreground">
