@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseFilters } from "@/lib/api";
+import { formatDatabaseError } from "@/lib/db-connection-hint";
 import { getStateBreakdown, getSummaryTotals } from "@/lib/domain/hiring-metrics";
 
 export async function GET(request: Request) {
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ totals, states });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not fetch dashboard data." },
+      { error: formatDatabaseError(error) },
       { status: 500 },
     );
   }

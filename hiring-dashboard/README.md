@@ -19,6 +19,23 @@ Hiring operations dashboard that migrates Excel-driven store and candidate track
 
 Copy `.env.example` to `.env` and fill values.
 
+### DATABASE_URL (Supabase) — common errors
+
+Use **Supabase → Connect → ORM → URI** (Transaction pooler, port `6543`).
+
+Example shape:
+
+```txt
+postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+```
+
+If you see **invalid port number**:
+
+- Password still contains `[YOUR-PASSWORD]` placeholder
+- Password has special characters (`@`, `#`, `%`) — **URL-encode** them (`@` → `%40`)
+- Extra spaces or quotes around the value in Vercel
+- Easiest fix: **reset DB password** in Supabase to letters+numbers only, paste into Vercel `DATABASE_URL`, redeploy
+
 ## Local Development
 
 ```bash
