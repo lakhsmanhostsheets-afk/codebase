@@ -84,10 +84,4 @@ export function parseLineupRow(record: Record<string, unknown>) {
   };
 }
 
-export function storeCompositeKey(row: {
-  storeName?: string;
-  city?: string;
-  state?: string;
-}) {
-  return `${(row.storeName || "").toLowerCase()}|${(row.city || "").toLowerCase()}|${(row.state || "").toLowerCase()}`;
-}
+export { compositeKey as storeCompositeKey } from "@/lib/domain/store-matching";

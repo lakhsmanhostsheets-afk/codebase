@@ -1,21 +1,25 @@
 /**
  * Import an Excel workbook directly into Postgres (no Vercel upload limit).
  *
- * Usage:
+ * Full import:
  *   npm run db:import -- "../Copy of Copy of AO Smith Hiring.xlsx"
  *
- * Uses DATABASE_URL from .env — set this to your Supabase connection string
- * (port 5432 direct URL is best for bulk import).
+ * Lineups only (after open list already loaded):
+ *   npm run db:import -- --lineups-only "../Copy of Copy of AO Smith Hiring.xlsx"
  */
 import { readFileSync, existsSync } from "fs";
 import { basename, resolve } from "path";
-import { importWorkbook } from "@/lib/domain/excel-import";
+import { importLineupsOnly, importWorkbook } from "@/lib/domain/excel-import";
 import { prisma } from "@/lib/prisma";
 
 async function main() {
-  const fileArg = process.argv[2];
+  const lineupsOnly = process.argv.includes("--lineups-only");
+  const fileArg = process.argv.find((arg) => /\.xlsx?$/i.test(arg));
+
   if (!fileArg) {
-    console.error("Usage: npm run db:import -- <path-to-workbook.xlsx>");
+    console.error(
+      "Usage: npm run db:import -- [--lineups-only] <path-to-workbook.xlsx>",
+    );
     process.exit(1);
   }
 
@@ -34,15 +38,17 @@ async function main() {
   const sourceFileName = basename(filePath);
 
   console.log(
-    `Importing ${sourceFileName} (${(buffer.length / 1024 / 1024).toFixed(2)} MB) into database…`,
+    `${lineupsOnly ? "Lineups-only" : "Full"} import: ${sourceFileName} (${(buffer.length / 1024 / 1024).toFixed(2)} MB)…`,
   );
   console.log("This may take several minutes for large workbooks…");
 
-  const result = await importWorkbook(buffer, sourceFileName);
+  const result = lineupsOnly
+    ? await importLineupsOnly(buffer, sourceFileName)
+    : await importWorkbook(buffer, sourceFileName);
 
   console.log(`Done: ${result.rowsImported}/${result.rowsRead} rows saved.`);
   if (result.errors.length > 0) {
-    console.log(`${result.errors.length} lineup rows skipped (store not found). First 15:`);
+    console.log(`${result.errors.length} warnings. First 15:`);
     for (const err of result.errors.slice(0, 15)) {
       console.log(`  - ${err}`);
     }

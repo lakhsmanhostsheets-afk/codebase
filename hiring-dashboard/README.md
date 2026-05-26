@@ -98,7 +98,7 @@ Mappings:
 
 ## API Contracts
 
-- `POST /api/imports` (multipart form-data with `file`)
+- `POST /api/imports` (JSON batches: `{ mode: "open"|"lineup", rows, rowOffset, sourceFileName }`)
 - `GET /api/dashboard/summary?state=&city=&supervisor=&accountName=&fromDate=&toDate=`
 - `GET /api/exports/excel?...filters`
 - `GET /api/exports/pdf?...filters`

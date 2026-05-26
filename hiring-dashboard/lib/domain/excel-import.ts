@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { extractWorkbookSheets } from "@/lib/domain/workbook-sheets";
 import { importLineupBatch, importOpenListBatch } from "@/lib/domain/import-batches";
+import { loadStoreIndexFromDb } from "@/lib/domain/store-matching";
 
 export type ImportResult = {
   rowsRead: number;
@@ -47,6 +48,7 @@ export async function importParsedRows(
       errors.push(...result.errors);
     }
 
+    const storeIndex = await loadStoreIndexFromDb(prisma);
     const lineupChunks = chunk(lineupRows, CHUNK_SIZE);
     for (let c = 0; c < lineupChunks.length; c += 1) {
       if (c === 0 || (c + 1) % 20 === 0 || c === lineupChunks.length - 1) {
@@ -56,6 +58,7 @@ export async function importParsedRows(
         lineupChunks[c],
         sourceFileName,
         c * CHUNK_SIZE,
+        storeIndex,
       );
       rowsImported += result.rowsImported;
       errors.push(...result.errors);
@@ -99,4 +102,66 @@ export async function importWorkbook(
 ): Promise<ImportResult> {
   const { openListRows, lineupRows } = extractWorkbookSheets(buffer);
   return importParsedRows(openListRows, lineupRows, sourceFileName);
+}
+
+/** Import only Line Up Final rows (skips open list; safe to re-run after open list load). */
+export async function importLineupsOnly(
+  buffer: Buffer,
+  sourceFileName: string,
+): Promise<ImportResult> {
+  const { lineupRows } = extractWorkbookSheets(buffer);
+  const errors: string[] = [];
+  let rowsImported = 0;
+  const rowsRead = lineupRows.length;
+
+  const importJob = await prisma.importJob.create({
+    data: { sourceFileName: `${sourceFileName} (lineups only)`, status: "running" },
+  });
+
+  try {
+    const storeIndex = await loadStoreIndexFromDb(prisma);
+    const lineupChunks = chunk(lineupRows, CHUNK_SIZE);
+
+    for (let c = 0; c < lineupChunks.length; c += 1) {
+      console.log(`  Lineups: batch ${c + 1}/${lineupChunks.length}…`);
+      const result = await importLineupBatch(
+        lineupChunks[c],
+        sourceFileName,
+        c * CHUNK_SIZE,
+        storeIndex,
+      );
+      rowsImported += result.rowsImported;
+      errors.push(...result.errors);
+    }
+
+    await prisma.importJob.update({
+      where: { id: importJob.id },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        rowsRead,
+        rowsImported,
+        errorsCount: errors.length,
+        errorsJson: errors.length ? JSON.stringify(errors.slice(0, 100)) : null,
+      },
+    });
+  } catch (error) {
+    await prisma.importJob.update({
+      where: { id: importJob.id },
+      data: {
+        status: "failed",
+        completedAt: new Date(),
+        rowsRead,
+        rowsImported,
+        errorsCount: errors.length + 1,
+        errorsJson: JSON.stringify([
+          ...errors.slice(0, 50),
+          error instanceof Error ? error.message : "Unknown import error",
+        ]),
+      },
+    });
+    throw error;
+  }
+
+  return { rowsRead, rowsImported, errors };
 }
