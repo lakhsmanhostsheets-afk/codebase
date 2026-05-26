@@ -28,6 +28,7 @@ export function LocationSelects({
   const [states, setStates] = useState<StateRow[]>([]);
   const [cities, setCities] = useState<CityRow[]>([]);
   const [stateId, setStateId] = useState("");
+  const [customState, setCustomState] = useState("");
   const [customCity, setCustomCity] = useState("");
   const [loadingStates, setLoadingStates] = useState(true);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -95,6 +96,27 @@ export function LocationSelects({
     }
   }
 
+  async function addState() {
+    if (!customState.trim()) return;
+    const res = await fetch("/api/locations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "state",
+        countryCode: "IN",
+        name: customState.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const next = [...states, data.state].sort((a, b) => a.name.localeCompare(b.name));
+      setStates(next);
+      onStateChange(data.state.name);
+      onCityChange("");
+      setCustomState("");
+    }
+  }
+
   return (
     <>
       <FormField label="Country">
@@ -125,6 +147,21 @@ export function LocationSelects({
             </option>
           ))}
         </select>
+        <div className="mt-2 flex gap-2">
+          <input
+            className={`${inputClassName} flex-1`}
+            placeholder="Add state if not listed"
+            value={customState}
+            onChange={(e) => setCustomState(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => void addState()}
+            className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+          >
+            Add
+          </button>
+        </div>
       </FormField>
       <FormField label="City">
         <select

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { FINAL_REMARK_OPTIONS } from "@/lib/constants";
 import { PageLoader } from "@/components/ui/page-loader";
@@ -147,6 +147,11 @@ export default function LineupsPage() {
     }
     if (editingId === id) resetForm();
     await loadData();
+  }
+
+  function normalizedPhone(value: string | null) {
+    if (!value) return "";
+    return value.replace(/[^\d+]/g, "");
   }
 
   return (
@@ -303,6 +308,7 @@ export default function LineupsPage() {
                   <th className="p-2">Candidate</th>
                   <th className="p-2">Store</th>
                   <th className="p-2">Recruiter</th>
+                  <th className="p-2">Contact</th>
                   <th className="p-2">Status</th>
                   <th className="w-16 p-2" />
                 </tr>
@@ -318,6 +324,32 @@ export default function LineupsPage() {
                       </span>
                     </td>
                     <td className="p-2">{row.candidate.recruiter || "—"}</td>
+                    <td className="p-2">
+                      {row.candidate.contactNumber ? (
+                        <div className="flex gap-1">
+                          <a
+                            href={`tel:${normalizedPhone(row.candidate.contactNumber)}`}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                            title="Call candidate"
+                          >
+                            <Phone className="h-3.5 w-3.5" />
+                            Call
+                          </a>
+                          <a
+                            href={`https://wa.me/${normalizedPhone(row.candidate.contactNumber).replace("+", "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                            title="WhatsApp candidate"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </a>
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="p-2">{row.finalRemarks}</td>
                     <td className="p-2">
                       <div className="flex gap-1">
