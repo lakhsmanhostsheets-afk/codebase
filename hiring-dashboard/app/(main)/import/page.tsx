@@ -51,8 +51,10 @@ export default function ImportPage() {
             Sheets: <strong>AO Smith Open list</strong> and <strong>Line Up Final</strong>
           </p>
           <p className="mt-2 text-xs text-slate-500">
-            Large files are parsed in your browser and saved in small batches (Vercel-safe).
+            Parsed in your browser, saved in small batches. If upload fails on Vercel, use{" "}
+            <code className="rounded bg-slate-100 px-1">npm run db:import</code> locally (see README).
           </p>
+          <p className="mt-1 text-xs font-medium text-indigo-700">Import UI v2 — batched API</p>
           <label className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700">
             {loading ? "Working…" : "Choose file"}
             <input

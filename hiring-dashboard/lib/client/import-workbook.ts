@@ -1,8 +1,8 @@
 import { extractWorkbookSheets, serializeRowsForApi } from "@/lib/domain/workbook-sheets";
 
 /** Stay well under Vercel's ~4.5MB request body limit. */
-const MAX_CHUNK_BYTES = 1.2 * 1024 * 1024;
-const INITIAL_BATCH_SIZE = 8;
+const MAX_CHUNK_BYTES = 400 * 1024;
+const INITIAL_BATCH_SIZE = 3;
 
 type ImportProgress = (message: string) => void;
 

@@ -45,6 +45,24 @@ npm run db:push
 npm run dev
 ```
 
+## Bulk import (recommended for large Excel files)
+
+Vercel blocks request bodies over ~4.5MB. For workbooks like your 8MB AO Smith file, **import from your PC straight into Supabase** (no upload to Vercel):
+
+1. In Supabase → **Connect** → copy the **direct** Postgres URI (port `5432`, not the pooler).
+2. Paste it as `DATABASE_URL` in `hiring-dashboard/.env` (same database as production).
+3. Create tables if needed: `npm run db:push`
+4. Run:
+
+```bash
+cd hiring-dashboard
+npm run db:import -- "../Copy of Copy of AO Smith Hiring.xlsx"
+```
+
+Data appears on the live site immediately (same database). Re-run only if you intend to duplicate rows.
+
+**Web import:** After deploy, the Import page should show **“Import UI v2 — batched API”**. If you still see “Files over 4MB… parsing happens locally”, hard-refresh or you are on an old deployment.
+
 ## Data Model
 
 Canonical tables:
