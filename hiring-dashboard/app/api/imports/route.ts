@@ -1,65 +1,63 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { importParsedRows, importWorkbook } from "@/lib/domain/excel-import";
+import { importLineupBatch, importOpenListBatch } from "@/lib/domain/import-batches";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
-const jsonImportSchema = z.object({
+const MAX_ROWS_PER_REQUEST = 25;
+
+const batchSchema = z.object({
   sourceFileName: z.string().min(1),
-  openListRows: z.array(z.record(z.string(), z.unknown())),
-  lineupRows: z.array(z.record(z.string(), z.unknown())),
+  mode: z.enum(["open", "lineup"]),
+  rows: z.array(z.record(z.string(), z.unknown())).max(MAX_ROWS_PER_REQUEST),
+  rowOffset: z.number().int().min(0).default(0),
 });
-
-async function parseJsonBody(request: Request) {
-  const contentType = request.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) return null;
-  const body = await request.json();
-  return jsonImportSchema.parse(body);
-}
 
 export async function POST(request: Request) {
   try {
-    const jsonPayload = await parseJsonBody(request).catch(() => null);
+    const contentType = request.headers.get("content-type") || "";
 
-    if (jsonPayload) {
-      const result = await importParsedRows(
-        jsonPayload.openListRows,
-        jsonPayload.lineupRows,
-        jsonPayload.sourceFileName,
-      );
-      return NextResponse.json(result);
-    }
-
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
+    if (!contentType.includes("application/json")) {
       return NextResponse.json(
         {
           error:
-            "Send JSON { sourceFileName, openListRows, lineupRows } or multipart file under 4MB.",
+            "Use Import Excel in the app (browser parses the file). Direct file upload is not supported on Vercel for large workbooks.",
         },
         { status: 400 },
       );
     }
 
-    if (file.size > 4 * 1024 * 1024) {
+    const body = await request.json();
+
+    const batch = batchSchema.safeParse(body);
+    if (batch.success) {
+      const { mode, rows, sourceFileName, rowOffset } = batch.data;
+      const result =
+        mode === "open"
+          ? await importOpenListBatch(rows, sourceFileName, rowOffset)
+          : await importLineupBatch(rows, sourceFileName, rowOffset);
+      return NextResponse.json({
+        rowsRead: rows.length,
+        rowsImported: result.rowsImported,
+        errors: result.errors,
+      });
+    }
+
+    if ("openListRows" in body || "lineupRows" in body) {
       return NextResponse.json(
         {
           error:
-            "File is too large for direct upload on Vercel (max ~4MB). The app will parse Excel in your browser automatically — please redeploy the latest version or use Import Excel from the left menu.",
+            "Full-workbook upload is not supported. Refresh the page and use Import Excel (batched save).",
         },
         { status: 413 },
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await importWorkbook(buffer, file.name);
-    return NextResponse.json(result);
+    return NextResponse.json({ error: "Invalid import payload." }, { status: 400 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Import failed." },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "Import failed.";
+    const status = message.includes("too large") ? 413 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

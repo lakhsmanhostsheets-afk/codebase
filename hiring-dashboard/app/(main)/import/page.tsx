@@ -22,11 +22,7 @@ export default function ImportPage() {
       setLog("Parsing Excel in your browser…");
       const parsed = await parseWorkbookFile(file);
 
-      setLog(
-        `Parsed ${parsed.rowsRead} rows. Saving to database…`,
-      );
-
-      const result = await postParsedImport(parsed);
+      const result = await postParsedImport(parsed, (msg) => setLog(msg));
 
       setLog(
         `Done: ${result.rowsImported}/${result.rowsRead} rows saved. Unmatched: ${result.errors?.length ?? 0}. Open Dashboard to view.`,
@@ -55,7 +51,7 @@ export default function ImportPage() {
             Sheets: <strong>AO Smith Open list</strong> and <strong>Line Up Final</strong>
           </p>
           <p className="mt-2 text-xs text-slate-500">
-            Files over 4MB are supported — parsing happens locally, not on Vercel.
+            Large files are parsed in your browser and saved in small batches (Vercel-safe).
           </p>
           <label className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700">
             {loading ? "Working…" : "Choose file"}
