@@ -19,12 +19,12 @@ export async function importOpenListBatch(
   const errors: string[] = [];
   let rowsImported = 0;
 
-  await prisma.$transaction(async (tx) => {
-    for (let index = 0; index < openListRows.length; index += 1) {
-      const record = parseOpenListRow(openListRows[index]);
-      if (!record.storeName || !record.city || !record.state) continue;
+  for (let index = 0; index < openListRows.length; index += 1) {
+    const record = parseOpenListRow(openListRows[index]);
+    if (!record.storeName || !record.city || !record.state) continue;
 
-      let store = await tx.store.findFirst({
+    try {
+      let store = await prisma.store.findFirst({
         where: {
           storeName: record.storeName,
           city: record.city,
@@ -33,7 +33,7 @@ export async function importOpenListBatch(
       });
 
       if (!store) {
-        store = await tx.store.create({
+        store = await prisma.store.create({
           data: {
             accountName: record.accountName || "Unknown",
             storeName: record.storeName,
@@ -47,7 +47,7 @@ export async function importOpenListBatch(
           },
         });
       } else {
-        store = await tx.store.update({
+        store = await prisma.store.update({
           where: { id: store.id },
           data: {
             accountName: record.accountName || "Unknown",
@@ -60,7 +60,7 @@ export async function importOpenListBatch(
         });
       }
 
-      await tx.openPosition.create({
+      await prisma.openPosition.create({
         data: {
           storeId: store.id,
           designation: record.designation || "Unknown",
@@ -73,8 +73,12 @@ export async function importOpenListBatch(
         },
       });
       rowsImported += 1;
+    } catch (error) {
+      errors.push(
+        `Open list row ${rowOffset + index + 2}: ${error instanceof Error ? error.message : "import failed"}`,
+      );
     }
-  });
+  }
 
   return { rowsImported, errors };
 }
@@ -87,12 +91,12 @@ export async function importLineupBatch(
   const errors: string[] = [];
   let rowsImported = 0;
 
-  await prisma.$transaction(async (tx) => {
-    for (let index = 0; index < lineupRows.length; index += 1) {
-      const record = parseLineupRow(lineupRows[index]);
-      if (!record.name || !record.storeName) continue;
+  for (let index = 0; index < lineupRows.length; index += 1) {
+    const record = parseLineupRow(lineupRows[index]);
+    if (!record.name || !record.storeName) continue;
 
-      const store = await tx.store.findFirst({
+    try {
+      const store = await prisma.store.findFirst({
         where: {
           storeName: record.storeName,
           ...(record.city ? { city: record.city } : {}),
@@ -107,7 +111,7 @@ export async function importLineupBatch(
         continue;
       }
 
-      const candidate = await tx.candidate.create({
+      const candidate = await prisma.candidate.create({
         data: {
           name: record.name,
           contactNumber: record.contactNo || null,
@@ -122,7 +126,7 @@ export async function importLineupBatch(
         },
       });
 
-      await tx.lineup.create({
+      await prisma.lineup.create({
         data: {
           storeId: store.id,
           candidateId: candidate.id,
@@ -138,8 +142,12 @@ export async function importLineupBatch(
         },
       });
       rowsImported += 1;
+    } catch (error) {
+      errors.push(
+        `Lineup row ${rowOffset + index + 2}: ${error instanceof Error ? error.message : "import failed"}`,
+      );
     }
-  });
+  }
 
   return { rowsImported, errors };
 }

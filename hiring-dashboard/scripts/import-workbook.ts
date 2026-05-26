@@ -36,6 +36,7 @@ async function main() {
   console.log(
     `Importing ${sourceFileName} (${(buffer.length / 1024 / 1024).toFixed(2)} MB) into database…`,
   );
+  console.log("This may take several minutes for large workbooks…");
 
   const result = await importWorkbook(buffer, sourceFileName);
 

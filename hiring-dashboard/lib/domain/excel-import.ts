@@ -8,7 +8,7 @@ export type ImportResult = {
   errors: string[];
 };
 
-const CHUNK_SIZE = 20;
+const CHUNK_SIZE = 50;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -35,6 +35,9 @@ export async function importParsedRows(
   try {
     const openChunks = chunk(openListRows, CHUNK_SIZE);
     for (let c = 0; c < openChunks.length; c += 1) {
+      if (c === 0 || (c + 1) % 20 === 0 || c === openChunks.length - 1) {
+        console.log(`  Open positions: batch ${c + 1}/${openChunks.length}…`);
+      }
       const result = await importOpenListBatch(
         openChunks[c],
         sourceFileName,
@@ -46,6 +49,9 @@ export async function importParsedRows(
 
     const lineupChunks = chunk(lineupRows, CHUNK_SIZE);
     for (let c = 0; c < lineupChunks.length; c += 1) {
+      if (c === 0 || (c + 1) % 20 === 0 || c === lineupChunks.length - 1) {
+        console.log(`  Lineups: batch ${c + 1}/${lineupChunks.length}…`);
+      }
       const result = await importLineupBatch(
         lineupChunks[c],
         sourceFileName,
