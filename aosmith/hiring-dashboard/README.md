@@ -102,3 +102,31 @@ Mappings:
 - `GET /api/dashboard/summary?state=&city=&supervisor=&accountName=&fromDate=&toDate=`
 - `GET /api/exports/excel?...filters`
 - `GET /api/exports/pdf?...filters`
+
+## Task Tracker (POC)
+
+Isolated module at **`/tasks`** — separate auth, tables (`Ops*`), and session from the hiring dashboard.
+
+### Task tracker env vars
+
+Add to `.env` and Vercel:
+
+```txt
+TASKS_ADMIN_EMAIL=admin@yourcompany.com
+TASKS_ADMIN_PASSWORD=your-secure-password
+TASKS_SESSION_SECRET=random-string-at-least-32-chars
+```
+
+On first login at `/tasks/login`, the bootstrap admin is created from `TASKS_ADMIN_EMAIL` / `TASKS_ADMIN_PASSWORD` if no admin exists yet. Then create team users under **Admin → Users**.
+
+### Task tracker routes
+
+- `/tasks/login` — team sign-in
+- `/tasks` — my tasks (assigned, created, or tagged)
+- `/tasks/new` — create task
+- `/tasks/admin` — all tasks grouped by person (admin)
+- `/tasks/admin/analytics` — per-user completed vs pending pie charts
+- `/tasks/admin/users` — create/deactivate users
+- `/tasks/admin/fields` — custom fields (e.g. Client Name)
+
+After schema changes: `npm run db:push` (adds `Ops*` tables only; hiring tables unchanged).

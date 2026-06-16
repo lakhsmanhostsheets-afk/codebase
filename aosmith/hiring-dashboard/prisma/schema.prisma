@@ -176,3 +176,145 @@ model DashboardWidget {
 
   @@index([dashboardId, orderIndex])
 }
+
+// --- Task tracking module (isolated from hiring) ---
+
+enum OpsRole {
+  ADMIN
+  MEMBER
+}
+
+enum OpsTaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OpsTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum OpsFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+}
+
+model OpsUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         OpsRole  @default(MEMBER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedTasks OpsTask[]         @relation("OpsTaskAssignee")
+  createdTasks  OpsTask[]         @relation("OpsTaskCreator")
+  taggedOn      OpsTaskMember[]
+  notes         OpsTaskNote[]
+  activities    OpsTaskActivity[]
+
+  @@index([role, isActive])
+}
+
+model OpsTask {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  status      OpsTaskStatus   @default(TODO)
+  priority    OpsTaskPriority @default(MEDIUM)
+  dueAt       DateTime?
+  assigneeId  String?
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  assignee   OpsUser?            @relation("OpsTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy  OpsUser             @relation("OpsTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members    OpsTaskMember[]
+  fieldValues OpsTaskFieldValue[]
+  notes      OpsTaskNote[]
+  activities OpsTaskActivity[]
+
+  @@index([assigneeId])
+  @@index([createdById])
+  @@index([status])
+  @@index([dueAt])
+  @@index([createdAt])
+}
+
+model OpsTaskMember {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task OpsTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user OpsUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model OpsTaskFieldDefinition {
+  id          String       @id @default(cuid())
+  label       String
+  slug        String       @unique
+  fieldType   OpsFieldType @default(TEXT)
+  optionsJson String?
+  orderIndex  Int          @default(0)
+  isRequired  Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  values OpsTaskFieldValue[]
+
+  @@index([isActive, orderIndex])
+}
+
+model OpsTaskFieldValue {
+  id                String @id @default(cuid())
+  taskId            String
+  fieldDefinitionId String
+  value             String @default("")
+
+  task            OpsTask                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fieldDefinition OpsTaskFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldDefinitionId])
+  @@index([fieldDefinitionId])
+}
+
+model OpsTaskNote {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  task   OpsTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author OpsUser @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+}
+
+model OpsTaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  message   String
+  createdAt DateTime @default(now())
+
+  task   OpsTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author OpsUser @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+}
