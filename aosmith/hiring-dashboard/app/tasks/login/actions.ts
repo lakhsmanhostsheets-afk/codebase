@@ -8,6 +8,14 @@ export async function tasksLoginAction(_: unknown, formData: FormData) {
   const password = String(formData.get("password") || "");
 
   try {
+    const bootstrapEmail = (process.env.TASKS_ADMIN_EMAIL || "").trim();
+    const bootstrapPassword = process.env.TASKS_ADMIN_PASSWORD || "";
+    if (!bootstrapEmail || !bootstrapPassword) {
+      return {
+        error: "Server misconfigured: TASKS_ADMIN_EMAIL and TASKS_ADMIN_PASSWORD must be set.",
+      };
+    }
+
     const user = await authenticateTasksUser(email, password);
     if (!user) {
       return { error: "Invalid credentials." };

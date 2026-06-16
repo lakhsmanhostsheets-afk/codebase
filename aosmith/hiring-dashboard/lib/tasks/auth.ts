@@ -20,18 +20,21 @@ export async function ensureBootstrapAdmin() {
   const password = process.env.TASKS_ADMIN_PASSWORD || "";
   if (!email || !password) return null;
 
-  const existingAdmin = await prisma.opsUser.findFirst({
-    where: { role: "ADMIN", isActive: true },
-  });
-  if (existingAdmin) return existingAdmin;
-
   const passwordHash = await hashPassword(password);
-  return prisma.opsUser.create({
-    data: {
+
+  // POC: always sync env-defined admin so Vercel credential changes take effect.
+  return prisma.opsUser.upsert({
+    where: { email },
+    create: {
       email,
       name: "Tasks Admin",
       passwordHash,
       role: "ADMIN",
+    },
+    update: {
+      passwordHash,
+      role: "ADMIN",
+      isActive: true,
     },
   });
 }
