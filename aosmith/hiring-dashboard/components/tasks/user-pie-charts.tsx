@@ -5,6 +5,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recha
 type UserAnalytics = {
   userId: string;
   name: string;
+  designation?: string | null;
   email: string;
   completed: number;
   pending: number;
@@ -30,6 +31,9 @@ export function UserPieCharts({ perUser }: { perUser: UserAnalytics[] }) {
         <div key={user.userId} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2">
             <h3 className="font-semibold text-slate-900">{user.name}</h3>
+            {user.designation ? (
+              <p className="text-xs text-slate-500">{user.designation}</p>
+            ) : null}
             <p className="text-xs text-slate-500">{user.email}</p>
           </div>
           <div className="h-48">

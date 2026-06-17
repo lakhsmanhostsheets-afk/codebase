@@ -42,9 +42,11 @@ export function OverdueBadge({ isOverdue }: { isOverdue: boolean }) {
 
 export function formatDueDate(dueAt: string | null) {
   if (!dueAt) return "—";
-  return new Date(dueAt).toLocaleDateString("en-IN", {
+  return new Date(dueAt).toLocaleString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }

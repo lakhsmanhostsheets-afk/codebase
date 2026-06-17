@@ -209,17 +209,23 @@ model OpsUser {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
+  designation  String?
   passwordHash String
   role         OpsRole  @default(MEMBER)
   isActive     Boolean  @default(true)
+  canCreateTask Boolean @default(true)
+  canAssignTask Boolean @default(true)
+  canViewAllTasks Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   assignedTasks OpsTask[]         @relation("OpsTaskAssignee")
   createdTasks  OpsTask[]         @relation("OpsTaskCreator")
   taggedOn      OpsTaskMember[]
+  grantedTaskAccess OpsTaskMember[] @relation("OpsTaskAccessGrantedBy")
   notes         OpsTaskNote[]
   activities    OpsTaskActivity[]
+  etaAlertsRead OpsTaskEtaAlert[] @relation("OpsEtaAlertAcknowledgedBy")
 
   @@index([role, isActive])
 }
@@ -231,6 +237,7 @@ model OpsTask {
   status      OpsTaskStatus   @default(TODO)
   priority    OpsTaskPriority @default(MEDIUM)
   dueAt       DateTime?
+  etaBreachedAt DateTime?
   assigneeId  String?
   createdById String
   createdAt   DateTime        @default(now())
@@ -242,25 +249,45 @@ model OpsTask {
   fieldValues OpsTaskFieldValue[]
   notes      OpsTaskNote[]
   activities OpsTaskActivity[]
+  etaAlerts  OpsTaskEtaAlert[]
 
   @@index([assigneeId])
   @@index([createdById])
   @@index([status])
   @@index([dueAt])
+  @@index([etaBreachedAt])
   @@index([createdAt])
+}
+
+model OpsTaskEtaAlert {
+  id               String   @id @default(cuid())
+  taskId            String   @unique
+  breachedAt        DateTime
+  acknowledgedAt    DateTime?
+  acknowledgedById  String?
+  createdAt         DateTime @default(now())
+
+  task           OpsTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  acknowledgedBy OpsUser? @relation("OpsEtaAlertAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([acknowledgedAt])
+  @@index([breachedAt])
 }
 
 model OpsTaskMember {
   id        String   @id @default(cuid())
   taskId    String
   userId    String
+  grantedById String?
   createdAt DateTime @default(now())
 
   task OpsTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user OpsUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy OpsUser? @relation("OpsTaskAccessGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
 
   @@unique([taskId, userId])
   @@index([userId])
+  @@index([grantedById])
 }
 
 model OpsTaskFieldDefinition {

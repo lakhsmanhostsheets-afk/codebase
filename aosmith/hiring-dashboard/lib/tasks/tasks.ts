@@ -1,28 +1,45 @@
 import type { OpsTaskPriority, OpsTaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { serializeTask } from "@/lib/tasks/serialize";
+import { ensureEtaBreachForTask } from "@/lib/tasks/eta-alerts";
+import {
+  canAssignTasksForUser,
+  canCreateTasksForUser,
+  type TaskCapabilities,
+} from "@/lib/tasks/permissions";
+import { serializeTask, serializeTaskList } from "@/lib/tasks/serialize";
 import { tasksWhereForUser, canAccessTask } from "@/lib/tasks/visibility";
 
-const taskInclude = {
-  assignee: { select: { id: true, name: true, email: true } },
-  createdBy: { select: { id: true, name: true, email: true } },
-  members: { include: { user: { select: { id: true, name: true, email: true } } } },
+const taskListSelect = {
+  id: true,
+  title: true,
+  status: true,
+  priority: true,
+  dueAt: true,
+  assignee: { select: { id: true, name: true, designation: true } },
+  members: {
+    include: { user: { select: { id: true, name: true, designation: true } } },
+  },
+} as const;
+
+const taskDetailInclude = {
+  ...taskListSelect,
+  assignee: { select: { id: true, name: true, designation: true, email: true } },
+  createdBy: { select: { id: true, name: true, designation: true, email: true } },
+  members: {
+    include: { user: { select: { id: true, name: true, designation: true, email: true } } },
+  },
   fieldValues: {
     include: {
       fieldDefinition: { select: { id: true, label: true, slug: true, fieldType: true } },
     },
   },
-} as const;
-
-const taskDetailInclude = {
-  ...taskInclude,
   notes: {
     orderBy: { createdAt: "desc" as const },
-    include: { author: { select: { id: true, name: true } } },
+    include: { author: { select: { id: true, name: true, designation: true } } },
   },
   activities: {
     orderBy: { createdAt: "desc" as const },
-    include: { author: { select: { id: true, name: true } } },
+    include: { author: { select: { id: true, name: true, designation: true } } },
   },
 };
 
@@ -30,18 +47,30 @@ export type ListTasksFilters = {
   status?: OpsTaskStatus;
   search?: string;
   assigneeId?: string;
+  onlyAssignedToUser?: boolean;
+  createdById?: string;
+  onlyCreatedByUser?: boolean;
 };
 
 export async function listTasks(
   userId: string,
-  role: "ADMIN" | "MEMBER",
+  user: TaskCapabilities,
   filters: ListTasksFilters = {},
 ) {
   const where: import("@prisma/client").Prisma.OpsTaskWhereInput = {
     AND: [
-      tasksWhereForUser(userId, role),
+      tasksWhereForUser(userId, user),
       ...(filters.status ? [{ status: filters.status }] : []),
-      ...(filters.assigneeId ? [{ assigneeId: filters.assigneeId }] : []),
+      ...(filters.onlyAssignedToUser
+        ? [{ assigneeId: userId }]
+        : filters.assigneeId
+          ? [{ assigneeId: filters.assigneeId }]
+          : []),
+      ...(filters.onlyCreatedByUser
+        ? [{ createdById: userId }]
+        : filters.createdById
+          ? [{ createdById: filters.createdById }]
+          : []),
       ...(filters.search
         ? [
             {
@@ -57,24 +86,26 @@ export async function listTasks(
 
   const tasks = await prisma.opsTask.findMany({
     where,
-    include: taskInclude,
+    select: taskListSelect,
     orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
   });
 
-  return tasks.map(serializeTask);
+  return tasks.map(serializeTaskList);
 }
 
-export async function getTaskById(taskId: string, userId: string, role: "ADMIN" | "MEMBER") {
+export async function getTaskById(taskId: string, userId: string, user: TaskCapabilities) {
   const task = await prisma.opsTask.findUnique({
     where: { id: taskId },
     include: {
       ...taskDetailInclude,
-      members: { include: { user: { select: { id: true, name: true, email: true } } } },
+      members: {
+        include: { user: { select: { id: true, name: true, designation: true, email: true } } },
+      },
     },
   });
 
   if (!task) return null;
-  if (!canAccessTask(task, userId, role)) return null;
+  if (!canAccessTask(task, userId, user)) return null;
   return serializeTask(task);
 }
 
@@ -89,8 +120,23 @@ export type CreateTaskInput = {
   fieldValues?: { fieldDefinitionId: string; value: string }[];
 };
 
-export async function createTask(userId: string, input: CreateTaskInput) {
+export async function createTask(
+  userId: string,
+  user: TaskCapabilities,
+  input: CreateTaskInput,
+) {
+  if (!canCreateTasksForUser(user)) {
+    throw new Error("Forbidden");
+  }
+  if (!canAssignTasksForUser(user) && input.assigneeId && input.assigneeId !== userId) {
+    throw new Error("Forbidden");
+  }
+
   const taggedUserIds = (input.taggedUserIds || []).filter((id) => id !== input.assigneeId);
+  const assigneeId = input.assigneeId || userId;
+  const accessUserIds = Array.from(
+    new Set([assigneeId, ...taggedUserIds].filter((value): value is string => Boolean(value))),
+  );
 
   const task = await prisma.opsTask.create({
     data: {
@@ -99,10 +145,10 @@ export async function createTask(userId: string, input: CreateTaskInput) {
       status: input.status || "TODO",
       priority: input.priority || "MEDIUM",
       dueAt: input.dueAt ? new Date(input.dueAt) : null,
-      assigneeId: input.assigneeId || userId,
+      assigneeId,
       createdById: userId,
       members: {
-        create: taggedUserIds.map((uid) => ({ userId: uid })),
+        create: accessUserIds.map((uid) => ({ userId: uid, grantedById: userId })),
       },
       fieldValues: input.fieldValues?.length
         ? {
@@ -119,15 +165,18 @@ export async function createTask(userId: string, input: CreateTaskInput) {
     include: taskDetailInclude,
   });
 
+  await ensureEtaBreachForTask(task.id);
   return serializeTask(task);
 }
 
-export type UpdateTaskInput = Partial<CreateTaskInput>;
+export type UpdateTaskInput = Partial<CreateTaskInput> & {
+  statusNote?: string;
+};
 
 export async function updateTask(
   taskId: string,
   userId: string,
-  role: "ADMIN" | "MEMBER",
+  user: TaskCapabilities,
   input: UpdateTaskInput,
 ) {
   const existing = await prisma.opsTask.findUnique({
@@ -135,11 +184,22 @@ export async function updateTask(
     include: { members: true },
   });
   if (!existing) return null;
-  if (!canAccessTask(existing, userId, role)) return null;
+  if (!canAccessTask(existing, userId, user)) return null;
+  const canManageAccess = user.role === "ADMIN" || existing.createdById === userId;
+  if (!canAssignTasksForUser(user) && input.assigneeId !== undefined && input.assigneeId !== existing.assigneeId) {
+    throw new Error("Forbidden");
+  }
+  if (!canManageAccess && input.taggedUserIds !== undefined) {
+    throw new Error("Forbidden");
+  }
 
   const activities: { authorId: string; message: string }[] = [];
 
   if (input.status && input.status !== existing.status) {
+    const statusNote = input.statusNote?.trim();
+    if (!statusNote) {
+      throw new Error("A note is required whenever task status changes.");
+    }
     activities.push({
       authorId: userId,
       message: `Status changed from ${existing.status} to ${input.status}`,
@@ -149,8 +209,9 @@ export async function updateTask(
     activities.push({ authorId: userId, message: "Assignee updated" });
   }
 
+  const nextAssigneeId = input.assigneeId ?? existing.assigneeId;
   const taggedUserIds = input.taggedUserIds
-    ? input.taggedUserIds.filter((id) => id !== (input.assigneeId ?? existing.assigneeId))
+    ? input.taggedUserIds.filter((id) => id !== nextAssigneeId)
     : undefined;
 
   if (taggedUserIds) {
@@ -166,17 +227,33 @@ export async function updateTask(
 
   await prisma.$transaction(async (tx) => {
     if (taggedUserIds) {
+      const accessUserIds = Array.from(
+        new Set(
+          [nextAssigneeId, ...taggedUserIds].filter((value): value is string => Boolean(value)),
+        ),
+      );
       await tx.opsTaskMember.deleteMany({ where: { taskId } });
-      if (taggedUserIds.length) {
+      if (accessUserIds.length) {
         await tx.opsTaskMember.createMany({
-          data: taggedUserIds.map((uid) => ({ taskId, userId: uid })),
+          data: accessUserIds.map((uid) => ({ taskId, userId: uid, grantedById: userId })),
         });
       }
+    } else if (
+      input.assigneeId !== undefined &&
+      input.assigneeId !== existing.assigneeId &&
+      input.assigneeId
+    ) {
+      await tx.opsTaskMember.upsert({
+        where: { taskId_userId: { taskId, userId: input.assigneeId } },
+        create: { taskId, userId: input.assigneeId, grantedById: userId },
+        update: { grantedById: userId },
+      });
     }
 
     if (input.fieldValues?.length) {
-      for (const fv of input.fieldValues) {
-        await tx.opsTaskFieldValue.upsert({
+      await Promise.all(
+        input.fieldValues.map((fv) =>
+          tx.opsTaskFieldValue.upsert({
           where: {
             taskId_fieldDefinitionId: {
               taskId,
@@ -189,12 +266,23 @@ export async function updateTask(
             value: fv.value,
           },
           update: { value: fv.value },
-        });
-      }
+          }),
+        ),
+      );
     }
 
     if (activities.length) {
       await tx.opsTaskActivity.createMany({ data: activities.map((a) => ({ taskId, ...a })) });
+    }
+
+    if (input.status && input.status !== existing.status) {
+      await tx.opsTaskNote.create({
+        data: {
+          taskId,
+          authorId: userId,
+          body: input.statusNote?.trim() || "",
+        },
+      });
     }
 
     await tx.opsTask.update({
@@ -214,11 +302,17 @@ export async function updateTask(
     });
   });
 
-  return getTaskById(taskId, userId, role);
+  await ensureEtaBreachForTask(taskId);
+  return getTaskById(taskId, userId, user);
 }
 
-export async function cancelTask(taskId: string, userId: string, role: "ADMIN" | "MEMBER") {
-  return updateTask(taskId, userId, role, { status: "CANCELLED" });
+export async function cancelTask(
+  taskId: string,
+  userId: string,
+  user: TaskCapabilities,
+  statusNote?: string,
+) {
+  return updateTask(taskId, userId, user, { status: "CANCELLED", statusNote });
 }
 
 export async function listTasksGroupedByAssignee() {
@@ -227,10 +321,11 @@ export async function listTasksGroupedByAssignee() {
     select: {
       id: true,
       name: true,
+      designation: true,
       email: true,
       role: true,
       assignedTasks: {
-        include: taskInclude,
+        select: taskListSelect,
         orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       },
     },
@@ -238,8 +333,8 @@ export async function listTasksGroupedByAssignee() {
   });
 
   return users.map((u) => ({
-    user: { id: u.id, name: u.name, email: u.email, role: u.role },
-    tasks: u.assignedTasks.map(serializeTask),
+    user: { id: u.id, name: u.name, designation: u.designation, email: u.email, role: u.role },
+    tasks: u.assignedTasks.map(serializeTaskList),
     counts: {
       total: u.assignedTasks.length,
       completed: u.assignedTasks.filter((t) => t.status === "COMPLETED").length,

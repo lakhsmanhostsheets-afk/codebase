@@ -10,8 +10,8 @@ export type TaskRow = {
   priority: string;
   dueAt: string | null;
   isOverdue: boolean;
-  assignee?: { id: string; name: string } | null;
-  members?: { user: { id: string; name: string } }[];
+  assignee?: { id: string; name: string; designation?: string | null } | null;
+  members?: { user: { id: string; name: string; designation?: string | null } }[];
 };
 
 type TaskListProps = {
@@ -56,7 +56,18 @@ export function TaskList({ tasks, showAssignee = false, emptyMessage = "No tasks
                 ) : null}
               </td>
               {showAssignee ? (
-                <td className="px-4 py-3 text-slate-600">{task.assignee?.name || "—"}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {task.assignee ? (
+                    <div>
+                      <p>{task.assignee.name}</p>
+                      {task.assignee.designation ? (
+                        <p className="text-xs text-slate-500">{task.assignee.designation}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               ) : null}
               <td className="px-4 py-3">
                 <StatusBadge status={task.status} />
@@ -67,7 +78,13 @@ export function TaskList({ tasks, showAssignee = false, emptyMessage = "No tasks
               <td className="px-4 py-3 text-slate-600">{formatDueDate(task.dueAt)}</td>
               <td className="px-4 py-3 text-slate-500">
                 {task.members?.length
-                  ? task.members.map((m) => m.user.name).join(", ")
+                  ? task.members
+                      .map((m) =>
+                        m.user.designation
+                          ? `${m.user.name} (${m.user.designation})`
+                          : m.user.name,
+                      )
+                      .join(", ")
                   : "—"}
               </td>
             </tr>

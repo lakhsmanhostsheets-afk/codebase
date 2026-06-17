@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const user = await requireTasksUser();
     const { id } = await context.params;
-    const notes = await listTaskNotes(id, user.id, user.role);
+    const notes = await listTaskNotes(id, user.id, user);
     if (!notes) {
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
     }
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: RouteContext) {
     const user = await requireTasksUser();
     const { id } = await context.params;
     const body = noteSchema.parse(await request.json());
-    const note = await addTaskNote(id, user.id, user.role, body.body);
+    const note = await addTaskNote(id, user.id, user, body.body);
     if (!note) {
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
     }

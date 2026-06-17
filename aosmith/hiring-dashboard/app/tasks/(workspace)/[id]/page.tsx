@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
-import { PageLoader } from "@/components/ui/page-loader";
 import { TaskForm } from "@/components/tasks/task-form";
 import { NotesPanel } from "@/components/tasks/notes-panel";
 import { StatusBadge, PriorityBadge, OverdueBadge, formatDueDate } from "@/components/tasks/task-badges";
+import { TasksLoadingState } from "@/components/tasks/tasks-loading-state";
 
 type TaskDetail = {
   id: string;
@@ -15,14 +15,25 @@ type TaskDetail = {
   status: string;
   priority: string;
   dueAt: string | null;
+  etaBreachedAt?: string | null;
   isOverdue: boolean;
   assigneeId: string | null;
-  assignee?: { id: string; name: string } | null;
-  createdBy?: { name: string };
-  members?: { userId: string; user: { name: string } }[];
+  assignee?: { id: string; name: string; designation?: string | null } | null;
+  createdBy?: { id: string; name: string; designation?: string | null };
+  members?: { userId: string; user: { name: string; designation?: string | null } }[];
   fieldValues?: { fieldDefinition: { id: string; label: string }; value: string }[];
-  notes?: { id: string; body: string; createdAt: string; author: { id: string; name: string } }[];
-  activities?: { id: string; message: string; createdAt: string; author: { name: string } }[];
+  notes?: {
+    id: string;
+    body: string;
+    createdAt: string;
+    author: { id: string; name: string; designation?: string | null };
+  }[];
+  activities?: {
+    id: string;
+    message: string;
+    createdAt: string;
+    author: { name: string; designation?: string | null };
+  }[];
 };
 
 export default function TaskDetailPage() {
@@ -44,7 +55,7 @@ export default function TaskDetailPage() {
       <>
         <PageHeader title="Task" description="Loading..." />
         <div className="p-6">
-          <PageLoader />
+          <TasksLoadingState label="Loading task details..." />
         </div>
       </>
     );
@@ -81,11 +92,12 @@ export default function TaskDetailPage() {
               mode="edit"
               taskId={taskId}
               initial={{
+                createdById: task.createdBy?.id,
                 title: task.title,
                 description: task.description || "",
                 status: task.status,
                 priority: task.priority,
-                dueAt: task.dueAt ? task.dueAt.slice(0, 10) : "",
+                dueAt: task.dueAt || "",
                 assigneeId: task.assigneeId || task.assignee?.id || "",
                 taggedUserIds: task.members?.map((m) => m.userId) || [],
                 fieldValues: Object.fromEntries(
@@ -110,7 +122,19 @@ export default function TaskDetailPage() {
                 </div>
                 <div className="flex gap-2">
                   <dt className="text-slate-500">Tagged:</dt>
-                  <dd>{task.members?.map((m) => m.user.name).join(", ") || "—"}</dd>
+                  <dd>
+                    {task.members
+                      ?.map((m) =>
+                        m.user.designation
+                          ? `${m.user.name} (${m.user.designation})`
+                          : m.user.name,
+                      )
+                      .join(", ") || "—"}
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-slate-500">ETA breached:</dt>
+                  <dd>{task.etaBreachedAt ? new Date(task.etaBreachedAt).toLocaleString("en-IN") : "No"}</dd>
                 </div>
               </dl>
               {task.fieldValues?.length ? (
@@ -145,7 +169,9 @@ export default function TaskDetailPage() {
                 <div key={a.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
                   <p className="text-slate-800">{a.message}</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {a.author.name} · {new Date(a.createdAt).toLocaleString("en-IN")}
+                    {a.author.name}
+                    {a.author.designation ? ` (${a.author.designation})` : ""} ·{" "}
+                    {new Date(a.createdAt).toLocaleString("en-IN")}
                   </p>
                 </div>
               ))

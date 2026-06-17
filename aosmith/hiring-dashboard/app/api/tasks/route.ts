@@ -25,11 +25,17 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") as OpsTaskStatus | null;
     const search = searchParams.get("search") || undefined;
     const assigneeId = searchParams.get("assigneeId") || undefined;
+    const createdById = searchParams.get("createdById") || undefined;
+    const onlyAssignedToUser = searchParams.get("onlyAssignedToUser") === "true";
+    const onlyCreatedByUser = searchParams.get("onlyCreatedByUser") === "true";
 
-    const tasks = await listTasks(user.id, user.role, {
+    const tasks = await listTasks(user.id, user, {
       status: status || undefined,
       search,
       assigneeId,
+      createdById,
+      onlyAssignedToUser,
+      onlyCreatedByUser,
     });
     return NextResponse.json({ tasks });
   } catch (error) {
@@ -41,7 +47,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireTasksUser();
     const body = createSchema.parse(await request.json());
-    const task = await createTask(user.id, {
+    const task = await createTask(user.id, user, {
       ...body,
       status: body.status as OpsTaskStatus | undefined,
       priority: body.priority as OpsTaskPriority | undefined,

@@ -5,7 +5,18 @@ import { prisma } from "@/lib/prisma";
 import { TASKS_SESSION_COOKIE } from "@/lib/tasks/constants";
 import { createTasksSessionToken, parseTasksSessionToken } from "@/lib/tasks/session";
 
-export type TasksUser = Pick<OpsUser, "id" | "email" | "name" | "role" | "isActive">;
+export type TasksUser = Pick<
+  OpsUser,
+  | "id"
+  | "email"
+  | "name"
+  | "designation"
+  | "role"
+  | "isActive"
+  | "canCreateTask"
+  | "canAssignTask"
+  | "canViewAllTasks"
+>;
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10);
@@ -30,11 +41,17 @@ export async function ensureBootstrapAdmin() {
       name: "Tasks Admin",
       passwordHash,
       role: "ADMIN",
+      canCreateTask: true,
+      canAssignTask: true,
+      canViewAllTasks: true,
     },
     update: {
       passwordHash,
       role: "ADMIN",
       isActive: true,
+      canCreateTask: true,
+      canAssignTask: true,
+      canViewAllTasks: true,
     },
   });
 }
@@ -66,7 +83,17 @@ export async function getTasksSessionUser(): Promise<TasksUser | null> {
 
   const user = await prisma.opsUser.findUnique({
     where: { id: payload.userId },
-    select: { id: true, email: true, name: true, role: true, isActive: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      designation: true,
+      role: true,
+      isActive: true,
+      canCreateTask: true,
+      canAssignTask: true,
+      canViewAllTasks: true,
+    },
   });
 
   if (!user || !user.isActive) return null;
@@ -103,9 +130,30 @@ export async function authenticateTasksUser(email: string, password: string) {
     id: user.id,
     email: user.email,
     name: user.name,
+    designation: user.designation,
     role: user.role as OpsRole,
     isActive: user.isActive,
+    canCreateTask: user.canCreateTask,
+    canAssignTask: user.canAssignTask,
+    canViewAllTasks: user.canViewAllTasks,
   } satisfies TasksUser;
+}
+
+export async function changeTasksUserPassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  const user = await prisma.opsUser.findUnique({ where: { id: userId } });
+  if (!user || !user.isActive) {
+    throw new Error("User not found.");
+  }
+  const valid = await verifyPassword(currentPassword, user.passwordHash);
+  if (!valid) {
+    throw new Error("Current password is incorrect.");
+  }
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.opsUser.update({ where: { id: userId }, data: { passwordHash } });
 }
 
 export function isTaskOverdue(dueAt: Date | string | null, status: string) {

@@ -7,7 +7,7 @@ type Note = {
   id: string;
   body: string;
   createdAt: string;
-  author: { id: string; name: string };
+  author: { id: string; name: string; designation?: string | null };
 };
 
 type NotesPanelProps = {
@@ -73,7 +73,9 @@ export function NotesPanel({ taskId, initialNotes }: NotesPanelProps) {
             <div key={note.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.body}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {note.author.name} · {new Date(note.createdAt).toLocaleString("en-IN")}
+                {note.author.name}
+                {note.author.designation ? ` (${note.author.designation})` : ""} ·{" "}
+                {new Date(note.createdAt).toLocaleString("en-IN")}
               </p>
             </div>
           ))

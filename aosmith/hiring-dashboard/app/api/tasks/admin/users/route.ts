@@ -2,13 +2,26 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireTasksAdmin } from "@/lib/tasks/auth";
 import { tasksApiError } from "@/lib/tasks/api";
-import { createOpsUser, deactivateOpsUser, listOpsUsers } from "@/lib/tasks/users";
+import { createOpsUser, deactivateOpsUser, listOpsUsers, updateOpsUser } from "@/lib/tasks/users";
 
 const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
+  designation: z.string().optional(),
   password: z.string().min(6),
   role: z.enum(["ADMIN", "MEMBER"]),
+  canCreateTask: z.boolean().optional(),
+  canAssignTask: z.boolean().optional(),
+  canViewAllTasks: z.boolean().optional(),
+});
+
+const updateUserSchema = z.object({
+  userId: z.string().min(1),
+  name: z.string().min(1),
+  designation: z.string().optional(),
+  canCreateTask: z.boolean().optional(),
+  canAssignTask: z.boolean().optional(),
+  canViewAllTasks: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -51,5 +64,22 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ user });
   } catch (error) {
     return tasksApiError(error, "Failed to deactivate user.");
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    await requireTasksAdmin();
+    const body = updateUserSchema.parse(await request.json());
+    const user = await updateOpsUser(body.userId, {
+      name: body.name,
+      designation: body.designation,
+      canCreateTask: body.canCreateTask,
+      canAssignTask: body.canAssignTask,
+      canViewAllTasks: body.canViewAllTasks,
+    });
+    return NextResponse.json({ user });
+  } catch (error) {
+    return tasksApiError(error, "Failed to update user.");
   }
 }

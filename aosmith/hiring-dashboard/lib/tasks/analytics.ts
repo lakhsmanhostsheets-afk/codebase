@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { isTaskOverdue } from "@/lib/tasks/auth";
 
-export async function getTasksAnalytics() {
+export async function getTasksAnalytics(userId?: string) {
   const users = await prisma.opsUser.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(userId ? { id: userId } : {}) },
     select: {
       id: true,
       name: true,
+      designation: true,
       email: true,
       assignedTasks: {
         select: { status: true, dueAt: true },
@@ -27,6 +28,7 @@ export async function getTasksAnalytics() {
     return {
       userId: u.id,
       name: u.name,
+      designation: u.designation,
       email: u.email,
       completed,
       pending,

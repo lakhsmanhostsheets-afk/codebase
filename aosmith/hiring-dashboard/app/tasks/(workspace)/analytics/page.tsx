@@ -9,7 +9,6 @@ type Analytics = {
   perUser: {
     userId: string;
     name: string;
-    designation?: string | null;
     email: string;
     completed: number;
     pending: number;
@@ -20,40 +19,35 @@ type Analytics = {
   totals: { completed: number; pending: number; overdue: number; total: number };
 };
 
-export default function AdminAnalyticsPage() {
+export default function MyAnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void fetch("/api/tasks/admin/analytics")
+    void fetch("/api/tasks/analytics")
       .then((r) => r.json())
       .then((d) => setData(d))
       .finally(() => setLoading(false));
   }, []);
 
+  const me = data?.perUser[0];
+
   return (
     <>
-      <PageHeader
-        title="Task Analytics"
-        description="Completed vs pending tasks per team member."
-      />
-
+      <PageHeader title="My Analytics" description="Your completed vs pending task split." />
       <div className="space-y-6 p-6">
         {loading ? (
           <PageLoader />
-        ) : data ? (
+        ) : me ? (
           <>
             <div className="grid gap-4 sm:grid-cols-4">
               {[
-                { label: "Total tasks", value: data.totals.total },
-                { label: "Completed", value: data.totals.completed },
-                { label: "Pending", value: data.totals.pending },
-                { label: "Overdue", value: data.totals.overdue, warn: true },
+                { label: "Total tasks", value: me.total },
+                { label: "Completed", value: me.completed },
+                { label: "Pending", value: me.pending },
+                { label: "Overdue", value: me.overdue, warn: true },
               ].map((card) => (
-                <div
-                  key={card.label}
-                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                >
+                <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
                   <p className={`mt-1 text-2xl font-bold ${card.warn ? "text-red-600" : "text-slate-900"}`}>
                     {card.value}
@@ -61,10 +55,10 @@ export default function AdminAnalyticsPage() {
                 </div>
               ))}
             </div>
-            <UserPieCharts perUser={data.perUser} />
+            <UserPieCharts perUser={[me]} />
           </>
         ) : (
-          <p className="text-sm text-slate-500">Failed to load analytics.</p>
+          <p className="text-sm text-slate-500">Failed to load your analytics.</p>
         )}
       </div>
     </>

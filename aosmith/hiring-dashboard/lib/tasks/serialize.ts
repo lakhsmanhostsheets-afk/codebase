@@ -11,9 +11,13 @@ type TaskWithRelations = {
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
-  assignee?: { id: string; name: string; email: string } | null;
-  createdBy?: { id: string; name: string; email: string };
-  members?: { userId: string; user: { id: string; name: string; email: string } }[];
+  etaBreachedAt?: Date | null;
+  assignee?: { id: string; name: string; designation: string | null; email: string } | null;
+  createdBy?: { id: string; name: string; designation: string | null; email: string };
+  members?: {
+    userId: string;
+    user: { id: string; name: string; designation: string | null; email: string };
+  }[];
   fieldValues?: {
     id: string;
     value: string;
@@ -23,21 +27,43 @@ type TaskWithRelations = {
     id: string;
     body: string;
     createdAt: Date;
-    author: { id: string; name: string };
+    author: { id: string; name: string; designation: string | null };
   }[];
   activities?: {
     id: string;
     message: string;
     createdAt: Date;
-    author: { id: string; name: string };
+    author: { id: string; name: string; designation: string | null };
   }[];
 };
+
+type TaskListShape = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueAt: Date | null;
+  assignee?: { id: string; name: string; designation: string | null } | null;
+  members?: {
+    userId: string;
+    user: { id: string; name: string; designation: string | null };
+  }[];
+};
+
+export function serializeTaskList(task: TaskListShape) {
+  return {
+    ...task,
+    dueAt: task.dueAt?.toISOString() ?? null,
+    isOverdue: isTaskOverdue(task.dueAt, task.status),
+  };
+}
 
 export function serializeTask(task: TaskWithRelations) {
   return {
     ...task,
     assigneeId: task.assigneeId,
     dueAt: task.dueAt?.toISOString() ?? null,
+    etaBreachedAt: task.etaBreachedAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString(),
     isOverdue: isTaskOverdue(task.dueAt, task.status),

@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoader } from "@/components/ui/page-loader";
+import { EtaAlertsPanel } from "@/components/tasks/eta-alerts-panel";
 import { TaskList, type TaskRow } from "@/components/tasks/task-list";
 
 type GroupedUser = {
-  user: { id: string; name: string; email: string; role: string };
+  user: { id: string; name: string; designation?: string | null; email: string; role: string };
   tasks: TaskRow[];
   counts: { total: number; completed: number; pending: number };
 };
@@ -31,6 +32,7 @@ export default function AdminTasksPage() {
       />
 
       <div className="space-y-4 p-6">
+        <EtaAlertsPanel />
         {loading ? (
           <PageLoader />
         ) : grouped.length === 0 ? (
@@ -45,6 +47,9 @@ export default function AdminTasksPage() {
               >
                 <div>
                   <p className="font-semibold text-slate-900">{row.user.name}</p>
+                  {row.user.designation ? (
+                    <p className="text-xs text-slate-500">{row.user.designation}</p>
+                  ) : null}
                   <p className="text-xs text-slate-500">{row.user.email}</p>
                 </div>
                 <div className="flex gap-4 text-sm">

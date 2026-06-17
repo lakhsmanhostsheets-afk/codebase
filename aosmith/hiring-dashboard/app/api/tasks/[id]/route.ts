@@ -16,6 +16,11 @@ const updateSchema = z.object({
   fieldValues: z
     .array(z.object({ fieldDefinitionId: z.string(), value: z.string() }))
     .optional(),
+  statusNote: z.string().optional(),
+});
+
+const cancelSchema = z.object({
+  statusNote: z.string().min(1),
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -24,7 +29,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const user = await requireTasksUser();
     const { id } = await context.params;
-    const task = await getTaskById(id, user.id, user.role);
+    const task = await getTaskById(id, user.id, user);
     if (!task) {
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
     }
@@ -39,7 +44,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const user = await requireTasksUser();
     const { id } = await context.params;
     const body = updateSchema.parse(await request.json());
-    const task = await updateTask(id, user.id, user.role, {
+    const task = await updateTask(id, user.id, user, {
       ...body,
       status: body.status as OpsTaskStatus | undefined,
       priority: body.priority as OpsTaskPriority | undefined,
@@ -57,7 +62,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const user = await requireTasksUser();
     const { id } = await context.params;
-    const task = await cancelTask(id, user.id, user.role);
+    const body = cancelSchema.parse(await _request.json());
+    const task = await cancelTask(id, user.id, user, body.statusNote);
     if (!task) {
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
     }

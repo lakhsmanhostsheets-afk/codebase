@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import {
   BarChart3,
   CheckSquare,
@@ -13,17 +12,12 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTasksUser } from "@/components/tasks/tasks-user-context";
 
-type TasksUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: "ADMIN" | "MEMBER";
-};
-
-const MEMBER_NAV = [
+const MEMBER_NAV_BASE = [
   { href: "/tasks", label: "My Tasks", icon: ListChecks },
-  { href: "/tasks/new", label: "New Task", icon: Plus },
+  { href: "/tasks/analytics", label: "My Analytics", icon: BarChart3 },
+  { href: "/tasks/settings", label: "Settings", icon: Settings },
 ] as const;
 
 const ADMIN_NAV = [
@@ -35,21 +29,17 @@ const ADMIN_NAV = [
 
 export function TasksSidebar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<TasksUser | null>(null);
-
-  useEffect(() => {
-    void fetch("/api/tasks/auth/me")
-      .then((r) => r.json())
-      .then((d) => setUser(d.user || null))
-      .catch(() => setUser(null));
-  }, []);
+  const { user } = useTasksUser();
 
   async function logout() {
     await fetch("/api/tasks/auth/logout", { method: "POST" });
     window.location.href = "/tasks/login";
   }
 
-  const navItems = user?.role === "ADMIN" ? [...MEMBER_NAV, ...ADMIN_NAV] : MEMBER_NAV;
+  const memberNav = user && (user.role === "ADMIN" || user.canCreateTask)
+    ? [...MEMBER_NAV_BASE, { href: "/tasks/new", label: "New Task", icon: Plus }]
+    : MEMBER_NAV_BASE;
+  const navItems = user?.role === "ADMIN" ? [...memberNav, ...ADMIN_NAV] : memberNav;
 
   return (
     <aside className="relative flex h-dvh w-[260px] shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#0f172a] text-white">
@@ -64,9 +54,11 @@ export function TasksSidebar() {
           </div>
         </div>
         {user ? (
-          <p className="mt-3 truncate text-xs text-slate-400">
-            {user.name} · {user.role === "ADMIN" ? "Admin" : "Member"}
-          </p>
+          <div className="mt-3 text-xs text-slate-400">
+            <p className="truncate">{user.name}</p>
+            {user.designation ? <p className="truncate text-[11px] text-slate-500">{user.designation}</p> : null}
+            <p>{user.role === "ADMIN" ? "Admin" : "Member"}</p>
+          </div>
         ) : null}
       </div>
 

@@ -9,13 +9,26 @@ type OpsUserRow = {
   id: string;
   email: string;
   name: string;
+  designation?: string | null;
   role: string;
   isActive: boolean;
+  canCreateTask: boolean;
+  canAssignTask: boolean;
+  canViewAllTasks: boolean;
   createdAt: string;
   _count: { assignedTasks: number };
 };
 
-const emptyForm = { name: "", email: "", password: "", role: "MEMBER" };
+const emptyForm = {
+  name: "",
+  designation: "",
+  email: "",
+  password: "",
+  role: "MEMBER",
+  canCreateTask: true,
+  canAssignTask: true,
+  canViewAllTasks: false,
+};
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<OpsUserRow[]>([]);
@@ -23,6 +36,12 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingDesignation, setEditingDesignation] = useState("");
+  const [editingCanCreateTask, setEditingCanCreateTask] = useState(true);
+  const [editingCanAssignTask, setEditingCanAssignTask] = useState(true);
+  const [editingCanViewAllTasks, setEditingCanViewAllTasks] = useState(false);
 
   async function loadUsers() {
     setLoading(true);
@@ -33,6 +52,7 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadUsers();
   }, []);
 
@@ -59,9 +79,31 @@ export default function AdminUsersPage() {
   }
 
   async function deactivateUser(userId: string) {
-    if (!confirm("Deactivate this user? They will no longer be able to sign in.")) return;
+    if (!confirm("Delete this user account? This performs a soft delete (deactivation).")) return;
     const res = await fetch(`/api/tasks/admin/users?userId=${userId}`, { method: "DELETE" });
     if (res.ok) await loadUsers();
+  }
+
+  async function saveUserName(userId: string) {
+    const name = editingName.trim();
+    if (!name) return;
+    const res = await fetch("/api/tasks/admin/users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        name,
+        designation: editingDesignation,
+        canCreateTask: editingCanCreateTask,
+        canAssignTask: editingCanAssignTask,
+        canViewAllTasks: editingCanViewAllTasks,
+      }),
+    });
+    if (res.ok) {
+      setEditingUserId(null);
+      setEditingName("");
+      await loadUsers();
+    }
   }
 
   return (
@@ -89,6 +131,14 @@ export default function AdminUsersPage() {
                 required
               />
             </FormField>
+            <FormField label="Designation">
+              <input
+                value={form.designation}
+                onChange={(e) => setForm((f) => ({ ...f, designation: e.target.value }))}
+                className={inputClassName}
+                placeholder="e.g. Ops Executive"
+              />
+            </FormField>
             <FormField label="Password">
               <input
                 type="password"
@@ -109,6 +159,34 @@ export default function AdminUsersPage() {
                 <option value="ADMIN">Admin</option>
               </select>
             </FormField>
+            {form.role !== "ADMIN" ? (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.canCreateTask}
+                    onChange={(e) => setForm((f) => ({ ...f, canCreateTask: e.target.checked }))}
+                  />
+                  Can create tasks
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.canAssignTask}
+                    onChange={(e) => setForm((f) => ({ ...f, canAssignTask: e.target.checked }))}
+                  />
+                  Can assign tasks
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.canViewAllTasks}
+                    onChange={(e) => setForm((f) => ({ ...f, canViewAllTasks: e.target.checked }))}
+                  />
+                  Can view all tasks
+                </label>
+              </>
+            ) : null}
           </div>
           {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
           <button
@@ -133,6 +211,7 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Tasks</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Permissions</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -140,21 +219,123 @@ export default function AdminUsersPage() {
                   {users.map((u) => (
                     <tr key={u.id} className="border-b border-slate-50">
                       <td className="px-4 py-3">
-                        <p className="font-medium">{u.name}</p>
+                        {editingUserId === u.id ? (
+                          <div className="space-y-2">
+                            <input
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              className={`${inputClassName} h-8`}
+                            />
+                            <input
+                              value={editingDesignation}
+                              onChange={(e) => setEditingDesignation(e.target.value)}
+                              className={`${inputClassName} h-8`}
+                              placeholder="Designation"
+                            />
+                            {u.role !== "ADMIN" ? (
+                              <div className="grid gap-1 text-xs text-slate-600">
+                                <label className="inline-flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingCanCreateTask}
+                                    onChange={(e) => setEditingCanCreateTask(e.target.checked)}
+                                  />
+                                  Create tasks
+                                </label>
+                                <label className="inline-flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingCanAssignTask}
+                                    onChange={(e) => setEditingCanAssignTask(e.target.checked)}
+                                  />
+                                  Assign tasks
+                                </label>
+                                <label className="inline-flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingCanViewAllTasks}
+                                    onChange={(e) => setEditingCanViewAllTasks(e.target.checked)}
+                                  />
+                                  View all tasks
+                                </label>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="font-medium">{u.name}</p>
+                            {u.designation ? (
+                              <p className="text-xs text-slate-500">{u.designation}</p>
+                            ) : null}
+                          </div>
+                        )}
                         <p className="text-xs text-slate-500">{u.email}</p>
                       </td>
                       <td className="px-4 py-3">{u.role}</td>
                       <td className="px-4 py-3">{u._count.assignedTasks}</td>
                       <td className="px-4 py-3">{u.isActive ? "Active" : "Inactive"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {u.role === "ADMIN"
+                          ? "All permissions"
+                          : [
+                              u.canCreateTask ? "Create" : null,
+                              u.canAssignTask ? "Assign" : null,
+                              u.canViewAllTasks ? "View all" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(", ") || "None"}
+                      </td>
                       <td className="px-4 py-3">
                         {u.isActive ? (
-                          <button
-                            type="button"
-                            onClick={() => deactivateUser(u.id)}
-                            className="text-xs text-red-600 hover:underline"
-                          >
-                            Deactivate
-                          </button>
+                          <div className="flex gap-2">
+                            {editingUserId === u.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveUserName(u.id)}
+                                  className="text-xs text-indigo-600 hover:underline"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingUserId(null);
+                                    setEditingName("");
+                                    setEditingDesignation("");
+                                    setEditingCanCreateTask(true);
+                                    setEditingCanAssignTask(true);
+                                    setEditingCanViewAllTasks(false);
+                                  }}
+                                  className="text-xs text-slate-600 hover:underline"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingUserId(u.id);
+                                  setEditingName(u.name);
+                                  setEditingDesignation(u.designation || "");
+                                  setEditingCanCreateTask(u.canCreateTask);
+                                  setEditingCanAssignTask(u.canAssignTask);
+                                  setEditingCanViewAllTasks(u.canViewAllTasks);
+                                }}
+                                className="text-xs text-indigo-600 hover:underline"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deactivateUser(u.id)}
+                              className="text-xs text-red-600 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         ) : null}
                       </td>
                     </tr>
