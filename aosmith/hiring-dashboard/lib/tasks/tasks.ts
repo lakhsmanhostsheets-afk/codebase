@@ -22,7 +22,6 @@ const taskListSelect = {
 } as const;
 
 const taskDetailInclude = {
-  ...taskListSelect,
   assignee: { select: { id: true, name: true, designation: true, email: true } },
   createdBy: { select: { id: true, name: true, designation: true, email: true } },
   members: {
