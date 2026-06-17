@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDateTimeIST } from "@/lib/datetime";
 import { FormField, inputClassName } from "@/components/ui/form-field";
 
 type Note = {
@@ -75,7 +76,7 @@ export function NotesPanel({ taskId, initialNotes }: NotesPanelProps) {
               <p className="mt-2 text-xs text-slate-500">
                 {note.author.name}
                 {note.author.designation ? ` (${note.author.designation})` : ""} ·{" "}
-                {new Date(note.createdAt).toLocaleString("en-IN")}
+                {formatDateTimeIST(note.createdAt)}
               </p>
             </div>
           ))

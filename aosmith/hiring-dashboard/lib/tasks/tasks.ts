@@ -1,4 +1,5 @@
 import type { OpsTaskPriority, OpsTaskStatus } from "@prisma/client";
+import { parseDueAtIST } from "@/lib/datetime";
 import { prisma } from "@/lib/prisma";
 import { ensureEtaBreachForTask } from "@/lib/tasks/eta-alerts";
 import {
@@ -143,7 +144,7 @@ export async function createTask(
       description: input.description?.trim() || null,
       status: input.status || "TODO",
       priority: input.priority || "MEDIUM",
-      dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      dueAt: input.dueAt ? parseDueAtIST(input.dueAt) : null,
       assigneeId,
       createdById: userId,
       members: {
@@ -294,7 +295,7 @@ export async function updateTask(
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
         ...(input.dueAt !== undefined
-          ? { dueAt: input.dueAt ? new Date(input.dueAt) : null }
+          ? { dueAt: input.dueAt ? parseDueAtIST(input.dueAt) : null }
           : {}),
         ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
       },

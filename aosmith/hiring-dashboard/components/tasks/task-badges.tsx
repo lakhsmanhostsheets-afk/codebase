@@ -1,3 +1,4 @@
+import { formatDueDateIST } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { OPS_TASK_PRIORITIES, OPS_TASK_STATUSES } from "@/lib/tasks/constants";
 
@@ -41,12 +42,5 @@ export function OverdueBadge({ isOverdue }: { isOverdue: boolean }) {
 }
 
 export function formatDueDate(dueAt: string | null) {
-  if (!dueAt) return "—";
-  return new Date(dueAt).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDueDateIST(dueAt);
 }

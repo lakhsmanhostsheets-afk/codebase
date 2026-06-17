@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { parseFilters } from "@/lib/api";
+import { formatDateTimeIST } from "@/lib/datetime";
 import { getStateBreakdown, getSummaryTotals } from "@/lib/domain/hiring-metrics";
 
 export const runtime = "nodejs";
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
   const { width, height } = page.getSize();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const generated = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const generated = formatDateTimeIST(new Date(), { dateStyle: "medium", timeStyle: "short" });
 
   page.drawRectangle({ x: 0, y: height - 88, width, height: 88, color: BRAND });
   page.drawText("V5 Global Solutions", {

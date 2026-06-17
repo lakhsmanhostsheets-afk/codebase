@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { formatDateTimeIST } from "@/lib/datetime";
 import { PageHeader } from "@/components/layout/page-header";
 import { TaskForm } from "@/components/tasks/task-form";
 import { NotesPanel } from "@/components/tasks/notes-panel";
@@ -134,7 +135,7 @@ export default function TaskDetailPage() {
                 </div>
                 <div className="flex gap-2">
                   <dt className="text-slate-500">ETA breached:</dt>
-                  <dd>{task.etaBreachedAt ? new Date(task.etaBreachedAt).toLocaleString("en-IN") : "No"}</dd>
+                  <dd>{task.etaBreachedAt ? formatDateTimeIST(task.etaBreachedAt) : "No"}</dd>
                 </div>
               </dl>
               {task.fieldValues?.length ? (
@@ -171,7 +172,7 @@ export default function TaskDetailPage() {
                   <p className="mt-1 text-xs text-slate-500">
                     {a.author.name}
                     {a.author.designation ? ` (${a.author.designation})` : ""} ·{" "}
-                    {new Date(a.createdAt).toLocaleString("en-IN")}
+                    {formatDateTimeIST(a.createdAt)}
                   </p>
                 </div>
               ))

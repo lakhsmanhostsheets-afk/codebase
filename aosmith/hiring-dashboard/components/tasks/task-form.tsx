@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormField, inputClassName } from "@/components/ui/form-field";
+import { toDatetimeLocalIST } from "@/lib/datetime";
 import { OPS_TASK_PRIORITIES, OPS_TASK_STATUSES } from "@/lib/tasks/constants";
 import { useTasksUser } from "@/components/tasks/tasks-user-context";
 
@@ -44,14 +45,6 @@ const emptyInitial = {
   statusNote: "",
 };
 
-function toDatetimeLocalValue(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const tzOffsetMinutes = date.getTimezoneOffset();
-  const localDate = new Date(date.getTime() - tzOffsetMinutes * 60 * 1000);
-  return localDate.toISOString().slice(0, 16);
-}
-
 export function TaskForm({ mode, taskId, initial }: TaskFormProps) {
   const { user } = useTasksUser();
   const router = useRouter();
@@ -59,7 +52,7 @@ export function TaskForm({ mode, taskId, initial }: TaskFormProps) {
     initial
       ? {
           ...initial,
-          dueAt: initial.dueAt ? toDatetimeLocalValue(initial.dueAt) : "",
+          dueAt: initial.dueAt ? toDatetimeLocalIST(initial.dueAt) : "",
         }
       : emptyInitial,
   );
@@ -282,7 +275,7 @@ export function TaskForm({ mode, taskId, initial }: TaskFormProps) {
         </FormField>
       ) : null}
 
-      <FormField label="Due date & time">
+      <FormField label="Due date & time (IST)">
         <input
           type="datetime-local"
           value={form.dueAt}

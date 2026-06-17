@@ -1,4 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import type { OpsTaskStatus } from "@prisma/client";
+import type { TaskCapabilities } from "@/lib/tasks/permissions";
+import { canViewAllTasksForUser } from "@/lib/tasks/permissions";
+import { tasksWhereForUser } from "@/lib/tasks/visibility";
+
+const ACTIVE_STATUSES: OpsTaskStatus[] = ["TODO", "IN_PROGRESS"];
 
 type EtaTaskShape = {
   id: string;
@@ -75,23 +81,73 @@ export async function scanEtaBreaches() {
   return { scanned: candidates.length, breached: created };
 }
 
+const etaAlertInclude = {
+  acknowledgedBy: { select: { id: true, name: true, designation: true, email: true } },
+  task: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      dueAt: true,
+      etaBreachedAt: true,
+      assigneeId: true,
+      createdById: true,
+      assignee: { select: { id: true, name: true, designation: true, email: true } },
+      members: { select: { userId: true } },
+    },
+  },
+} as const;
+
 export async function listEtaAlerts() {
   return prisma.opsTaskEtaAlert.findMany({
-    include: {
-      acknowledgedBy: { select: { id: true, name: true, designation: true, email: true } },
-      task: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          dueAt: true,
-          etaBreachedAt: true,
-          assignee: { select: { id: true, name: true, designation: true, email: true } },
-        },
-      },
-    },
+    include: etaAlertInclude,
     orderBy: [{ acknowledgedAt: "asc" }, { breachedAt: "desc" }],
   });
+}
+
+function userRelevantTaskFilter(userId: string) {
+  return {
+    OR: [
+      { assigneeId: userId },
+      { createdById: userId },
+      { members: { some: { userId } } },
+    ],
+    status: { in: ACTIVE_STATUSES },
+  };
+}
+
+export async function listEtaAlertsForUser(userId: string, user: TaskCapabilities) {
+  const taskFilter = canViewAllTasksForUser(user)
+    ? userRelevantTaskFilter(userId)
+    : {
+        AND: [tasksWhereForUser(userId, user), { status: { in: ACTIVE_STATUSES } }],
+      };
+
+  return prisma.opsTaskEtaAlert.findMany({
+    where: { task: taskFilter },
+    include: etaAlertInclude,
+    orderBy: { breachedAt: "desc" },
+  });
+}
+
+type EtaAlertRecord = Awaited<ReturnType<typeof listEtaAlertsForUser>>[number];
+
+export function serializeEtaAlert(alert: EtaAlertRecord) {
+  return {
+    id: alert.id,
+    breachedAt: alert.breachedAt.toISOString(),
+    createdAt: alert.createdAt.toISOString(),
+    acknowledgedAt: alert.acknowledgedAt?.toISOString() ?? null,
+    acknowledgedBy: alert.acknowledgedBy,
+    task: {
+      id: alert.task.id,
+      title: alert.task.title,
+      status: alert.task.status,
+      dueAt: alert.task.dueAt?.toISOString() ?? null,
+      etaBreachedAt: alert.task.etaBreachedAt?.toISOString() ?? null,
+      assignee: alert.task.assignee,
+    },
+  };
 }
 
 export async function acknowledgeEtaAlert(alertId: string, adminUserId: string) {
@@ -101,18 +157,6 @@ export async function acknowledgeEtaAlert(alertId: string, adminUserId: string) 
       acknowledgedAt: new Date(),
       acknowledgedById: adminUserId,
     },
-    include: {
-      acknowledgedBy: { select: { id: true, name: true, designation: true, email: true } },
-      task: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          dueAt: true,
-          etaBreachedAt: true,
-          assignee: { select: { id: true, name: true, designation: true, email: true } },
-        },
-      },
-    },
+    include: etaAlertInclude,
   });
 }

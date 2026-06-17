@@ -1,13 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { TaskRow } from "@/components/tasks/task-list";
+import { useCallback, useEffect, useState } from "react";
 import { useTasksUser } from "@/components/tasks/tasks-user-context";
+import { formatDateTimeIST } from "@/lib/datetime";
 
 const SNOOZE_MINUTES = 15;
 const SNOOZE_KEY = "tasks:snoozeUntil";
-const NOTIFIED_KEY = "tasks:notifiedDue";
+const NOTIFIED_KEY = "tasks:notifiedEtaBreach";
+
+type EtaAlert = {
+  id: string;
+  breachedAt: string;
+  task: {
+    id: string;
+    title: string;
+    status: string;
+    dueAt: string | null;
+    assignee: { id: string; name: string; designation?: string | null } | null;
+  };
+};
 
 function readStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -21,7 +33,7 @@ function readStorage<T>(key: string, fallback: T): T {
 
 export function DueTaskAlerts() {
   const { user } = useTasksUser();
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [alerts, setAlerts] = useState<EtaAlert[]>([]);
   const [snoozeUntil, setSnoozeUntil] = useState<number | null>(() =>
     readStorage<number | null>(SNOOZE_KEY, null),
   );
@@ -30,21 +42,19 @@ export function DueTaskAlerts() {
   );
   const [now, setNow] = useState(() => Date.now());
 
-  const loadTasks = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (user) params.set("assigneeId", user.id);
-    const response = await fetch(`/api/tasks?${params.toString()}`);
+  const loadAlerts = useCallback(async () => {
+    const response = await fetch("/api/tasks/eta-alerts");
     const data = await response.json();
-    if (response.ok) setTasks(data.tasks || []);
-  }, [user]);
+    if (response.ok) setAlerts(data.alerts || []);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadTasks();
-    const onFocus = () => void loadTasks();
+    void loadAlerts();
+    const onFocus = () => void loadAlerts();
     const onVisible = () => {
-      if (!document.hidden) void loadTasks();
+      if (!document.hidden) void loadAlerts();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -52,32 +62,25 @@ export function DueTaskAlerts() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [loadTasks, user]);
+  }, [loadAlerts, user]);
 
   useEffect(() => {
-    const onVisibleOrFocus = () => setNow(Date.now());
-    const timer = window.setInterval(onVisibleOrFocus, 30000);
-    window.addEventListener("focus", onVisibleOrFocus);
-    document.addEventListener("visibilitychange", onVisibleOrFocus);
+    const refresh = () => setNow(Date.now());
+    const timer = window.setInterval(() => {
+      refresh();
+      if (user) void loadAlerts();
+    }, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("focus", onVisibleOrFocus);
-      document.removeEventListener("visibilitychange", onVisibleOrFocus);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
-
-  const dueTasks = useMemo(
-    () =>
-      tasks.filter((task) => {
-        if (!task.dueAt) return false;
-        if (task.status === "COMPLETED" || task.status === "CANCELLED") return false;
-        return new Date(task.dueAt).getTime() <= now;
-      }),
-    [now, tasks],
-  );
+  }, [loadAlerts, user]);
 
   useEffect(() => {
-    if (!("Notification" in window) || !dueTasks.length) return;
+    if (!("Notification" in window) || !alerts.length) return;
     if (Notification.permission === "default") {
       void Notification.requestPermission();
       return;
@@ -86,12 +89,12 @@ export function DueTaskAlerts() {
 
     const nextNotified = new Set(notifiedIds);
     let changed = false;
-    for (const task of dueTasks) {
-      if (nextNotified.has(task.id)) continue;
-      new Notification("Task due", {
-        body: `${task.title} is due now (${task.dueAt ? new Date(task.dueAt).toLocaleString("en-IN") : ""})`,
+    for (const alert of alerts) {
+      if (nextNotified.has(alert.id)) continue;
+      new Notification("ETA breached", {
+        body: `${alert.task.title} was due at ${alert.task.dueAt ? formatDateTimeIST(alert.task.dueAt) : "unknown time"}`,
       });
-      nextNotified.add(task.id);
+      nextNotified.add(alert.id);
       changed = true;
     }
     if (changed) {
@@ -100,7 +103,7 @@ export function DueTaskAlerts() {
       setNotifiedIds(value);
       window.localStorage.setItem(NOTIFIED_KEY, JSON.stringify(value));
     }
-  }, [dueTasks, notifiedIds]);
+  }, [alerts, notifiedIds]);
 
   const isSnoozed = snoozeUntil !== null && now < snoozeUntil;
 
@@ -110,12 +113,12 @@ export function DueTaskAlerts() {
     window.localStorage.setItem(SNOOZE_KEY, JSON.stringify(next));
   }
 
-  if (!dueTasks.length || isSnoozed) return null;
+  if (!user || !alerts.length || isSnoozed) return null;
 
   return (
     <div className="mx-6 mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-semibold">Due task alert</p>
+        <p className="font-semibold">ETA breach alert</p>
         <button
           type="button"
           onClick={snooze}
@@ -124,13 +127,17 @@ export function DueTaskAlerts() {
           Snooze 15 min
         </button>
       </div>
+      <p className="mt-1 text-xs text-amber-800">
+        These tasks are past their due time on tasks assigned to you, created by you, or where you are tagged.
+      </p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
-        {dueTasks.map((task) => (
-          <li key={task.id}>
-            <Link href={`/tasks/${task.id}`} className="font-medium underline">
-              {task.title}
+        {alerts.map((alert) => (
+          <li key={alert.id}>
+            <Link href={`/tasks/${alert.task.id}`} className="font-medium underline">
+              {alert.task.title}
             </Link>{" "}
-            ({task.dueAt ? new Date(task.dueAt).toLocaleString("en-IN") : "No due date"})
+            (due {alert.task.dueAt ? formatDateTimeIST(alert.task.dueAt) : "not set"}, breached{" "}
+            {formatDateTimeIST(alert.breachedAt)})
           </li>
         ))}
       </ul>

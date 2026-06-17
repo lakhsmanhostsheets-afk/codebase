@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { formatDateTimeIST } from "@/lib/datetime";
 
 type EtaAlert = {
   id: string;
@@ -96,8 +97,8 @@ export function EtaAlertsPanel() {
                 </Link>
               </p>
               <p className="mt-1 text-xs text-slate-600">
-                Breached at {new Date(alert.breachedAt).toLocaleString("en-IN")} · Due{" "}
-                {alert.task.dueAt ? new Date(alert.task.dueAt).toLocaleString("en-IN") : "Not set"} ·
+                Breached at {formatDateTimeIST(alert.breachedAt)} · Due{" "}
+                {alert.task.dueAt ? formatDateTimeIST(alert.task.dueAt) : "Not set"} ·
                 Current status {alert.task.status}
               </p>
               {alert.task.assignee ? (
@@ -116,7 +117,7 @@ export function EtaAlertsPanel() {
                 </button>
               ) : (
                 <p className="mt-2 text-xs text-emerald-700">
-                  Read on {new Date(alert.acknowledgedAt).toLocaleString("en-IN")}
+                  Read on {formatDateTimeIST(alert.acknowledgedAt)}
                 </p>
               )}
             </li>
