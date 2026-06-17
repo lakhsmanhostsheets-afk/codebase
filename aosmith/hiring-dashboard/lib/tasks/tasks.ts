@@ -8,7 +8,7 @@ import {
   type TaskCapabilities,
 } from "@/lib/tasks/permissions";
 import { serializeTask, serializeTaskList } from "@/lib/tasks/serialize";
-import { tasksWhereForUser, canAccessTask } from "@/lib/tasks/visibility";
+import { tasksWhereForUser, canAccessTask, canEditTask } from "@/lib/tasks/visibility";
 
 const taskListSelect = {
   id: true,
@@ -106,7 +106,7 @@ export async function getTaskById(taskId: string, userId: string, user: TaskCapa
 
   if (!task) return null;
   if (!canAccessTask(task, userId, user)) return null;
-  return serializeTask(task);
+  return { ...serializeTask(task), canEdit: canEditTask(task, userId, user) };
 }
 
 export type CreateTaskInput = {

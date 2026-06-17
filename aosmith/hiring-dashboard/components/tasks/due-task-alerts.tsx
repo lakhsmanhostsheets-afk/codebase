@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useTasksUser } from "@/components/tasks/tasks-user-context";
 import { formatDateTimeIST } from "@/lib/datetime";
-
-const SNOOZE_MINUTES = 15;
-const SNOOZE_KEY = "tasks:snoozeUntil";
-const NOTIFIED_KEY = "tasks:notifiedEtaBreach";
+import {
+  getEtaSnoozeUntil,
+  listenForEtaSnoozeMessages,
+  registerEtaNotificationWorker,
+  showEtaBreachNotifications,
+  snoozeEtaAlerts,
+} from "@/lib/client/eta-notifications";
 
 type EtaAlert = {
   id: string;
@@ -21,25 +24,10 @@ type EtaAlert = {
   };
 };
 
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export function DueTaskAlerts() {
   const { user } = useTasksUser();
   const [alerts, setAlerts] = useState<EtaAlert[]>([]);
-  const [snoozeUntil, setSnoozeUntil] = useState<number | null>(() =>
-    readStorage<number | null>(SNOOZE_KEY, null),
-  );
-  const [notifiedIds, setNotifiedIds] = useState<string[]>(() =>
-    readStorage<string[]>(NOTIFIED_KEY, []),
-  );
+  const [snoozeUntil, setSnoozeUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const loadAlerts = useCallback(async () => {
@@ -50,6 +38,8 @@ export function DueTaskAlerts() {
 
   useEffect(() => {
     if (!user) return;
+    void registerEtaNotificationWorker();
+    void getEtaSnoozeUntil().then(setSnoozeUntil);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAlerts();
     const onFocus = () => void loadAlerts();
@@ -63,6 +53,10 @@ export function DueTaskAlerts() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [loadAlerts, user]);
+
+  useEffect(() => {
+    return listenForEtaSnoozeMessages((until) => setSnoozeUntil(until));
+  }, []);
 
   useEffect(() => {
     const refresh = () => setNow(Date.now());
@@ -80,48 +74,44 @@ export function DueTaskAlerts() {
   }, [loadAlerts, user]);
 
   useEffect(() => {
-    if (!("Notification" in window) || !alerts.length) return;
+    if (!alerts.length || isSnoozed(snoozeUntil, now)) return;
+    if (!("Notification" in window)) return;
     if (Notification.permission === "default") {
       void Notification.requestPermission();
       return;
     }
     if (Notification.permission !== "granted") return;
 
-    const nextNotified = new Set(notifiedIds);
-    let changed = false;
-    for (const alert of alerts) {
-      if (nextNotified.has(alert.id)) continue;
-      new Notification("ETA breached", {
-        body: `${alert.task.title} was due at ${alert.task.dueAt ? formatDateTimeIST(alert.task.dueAt) : "unknown time"}`,
-      });
-      nextNotified.add(alert.id);
-      changed = true;
-    }
-    if (changed) {
-      const value = Array.from(nextNotified);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNotifiedIds(value);
-      window.localStorage.setItem(NOTIFIED_KEY, JSON.stringify(value));
-    }
-  }, [alerts, notifiedIds]);
+    void showEtaBreachNotifications(
+      alerts.map((alert) => ({
+        id: alert.id,
+        task: {
+          id: alert.task.id,
+          title: alert.task.title,
+          dueAt: alert.task.dueAt ? formatDateTimeIST(alert.task.dueAt) : null,
+        },
+      })),
+    );
+  }, [alerts, now, snoozeUntil]);
 
-  const isSnoozed = snoozeUntil !== null && now < snoozeUntil;
+  const isSnoozedActive = isSnoozed(snoozeUntil, now);
 
-  function snooze() {
-    const next = Date.now() + SNOOZE_MINUTES * 60 * 1000;
-    setSnoozeUntil(next);
-    window.localStorage.setItem(SNOOZE_KEY, JSON.stringify(next));
+  async function snooze() {
+    const until = await snoozeEtaAlerts();
+    setSnoozeUntil(until);
   }
 
-  if (!user || !alerts.length || isSnoozed) return null;
+  if (!user || !alerts.length || isSnoozedActive) return null;
 
   return (
     <div className="mx-6 mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-semibold">ETA breach alert</p>
+        <p className="font-semibold">
+          ETA breach alert{alerts.length > 1 ? ` (${alerts.length})` : ""}
+        </p>
         <button
           type="button"
-          onClick={snooze}
+          onClick={() => void snooze()}
           className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800"
         >
           Snooze 15 min
@@ -143,4 +133,8 @@ export function DueTaskAlerts() {
       </ul>
     </div>
   );
+}
+
+function isSnoozed(snoozeUntil: number | null, now: number) {
+  return snoozeUntil !== null && now < snoozeUntil;
 }

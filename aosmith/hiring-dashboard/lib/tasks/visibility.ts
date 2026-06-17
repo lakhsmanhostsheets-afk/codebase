@@ -23,3 +23,11 @@ export function canAccessTask(
   if (task.createdById === userId) return true;
   return task.members.some((m) => m.userId === userId);
 }
+
+export function canEditTask(
+  task: { assigneeId: string | null; createdById: string; members: { userId: string }[] },
+  userId: string,
+  user: TaskCapabilities,
+) {
+  return canAccessTask(task, userId, user);
+}

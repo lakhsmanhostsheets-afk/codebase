@@ -18,6 +18,7 @@ type TaskDetail = {
   dueAt: string | null;
   etaBreachedAt?: string | null;
   isOverdue: boolean;
+  canEdit: boolean;
   assigneeId: string | null;
   assignee?: { id: string; name: string; designation?: string | null } | null;
   createdBy?: { id: string; name: string; designation?: string | null };
@@ -42,7 +43,6 @@ export default function TaskDetailPage() {
   const taskId = String(params.id);
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     void fetch(`/api/tasks/${taskId}`)
@@ -75,20 +75,11 @@ export default function TaskDetailPage() {
       <PageHeader
         title={task.title}
         description={`Assigned to ${task.assignee?.name || "—"} · Created by ${task.createdBy?.name || "—"}`}
-        actions={
-          <button
-            type="button"
-            onClick={() => setEditing((v) => !v)}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm"
-          >
-            {editing ? "Cancel edit" : "Edit task"}
-          </button>
-        }
       />
 
       <div className="grid gap-6 p-6 lg:grid-cols-2">
         <div className="space-y-6">
-          {editing ? (
+          {task.canEdit ? (
             <TaskForm
               mode="edit"
               taskId={taskId}
